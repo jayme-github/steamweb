@@ -12,7 +12,7 @@ password = YOURSTEAMPASSWORD
 
 Usage like:
 ```python
-from steam_login import SteamWebBrowser
+from steamweb import SteamWebBrowser
 swb = SteamWebBrowser()
 if not swb.logged_in():
     swb.login()

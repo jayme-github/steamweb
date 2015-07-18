@@ -8,7 +8,7 @@ from cookielib import LWPCookieJar
 import ConfigParser
 from base64 import b64encode
 
-class SteamWebBrowser(object):
+class SteamWebBrowser():
     cfg = None
     browser = None
     rsa_cipher = None
@@ -18,7 +18,14 @@ class SteamWebBrowser(object):
     def __init__(self):
         self.cfg = ConfigParser.ConfigParser()
         script_dir = os.path.dirname(__file__)
-        self.cfg.read(os.path.join(script_dir, 'config.cfg'))
+        if not os.path.exists(os.path.join(script_dir, 'config.cfg')):
+            self.cfg.add_section('steamweb')
+            self.cfg.set('steamweb', 'username', raw_input('Username: '))
+            self.cfg.set('steamweb', 'password', raw_input('Password: '))
+            with open(os.path.join(script_dir, 'config.cfg'), 'wb') as config:
+                self.cfg.write(config)
+        else:
+            self.cfg.read(os.path.join(script_dir, 'config.cfg'))
         
         user_agent = 'Mozilla/5.0 (compatible, MSIE 11, Windows NT 6.3; Trident/7.0; rv:11.0) like Gecko'
         cookie_file = os.path.join(script_dir, 'cookies.lwp')
@@ -134,9 +141,9 @@ class SteamWebBrowser(object):
         if req.ok:
             #self._log_cookies('login')
             data = req.json()
-            if data.get('message'):
-                print 'MSG:', data.get('message')
-                if data.get('message') == 'Incorrect login.':
+            if 'message' in data:
+                print 'MSG:', data['message']
+                if data['message'] == 'Incorrect login.':
                     return
 
             if data['success']:
@@ -150,7 +157,7 @@ class SteamWebBrowser(object):
                 self._save_cookies()
                 return True
 
-            elif data.get('captcha_needed', False) and data.get('captcha_gid', '-1') != '-1':
+            elif 'captcha_needed' in data and data['captcha_needed'] and data['captcha_gid'] != '-1':
                 imgdata = self.get('https://steamcommunity.com/public/captcha.php',
                                             params={'gid': data['captcha_gid']})
                 if imgdata.ok:
@@ -170,7 +177,7 @@ class SteamWebBrowser(object):
                     print 'Failed to get captcha'
                     return False
 
-            elif data.get('emailauth_needed', False):
+            elif 'emailauth_needed' in data and data['emailauth_needed']:
                 print 'SteamGuard requires email authentication...'
                 print 'Please enter the code send to your mail addres at "%s":' % data['emaildomain']
                 emailauth = raw_input('Enter code: ')
@@ -183,3 +190,7 @@ class SteamWebBrowser(object):
             else:
                 print 'Error, could not login:', data
                 return False
+
+if __name__ == '__main__':
+    swb = SteamWebBrowser()
+    swb.login()

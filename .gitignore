@@ -1,3 +1,7 @@
+# Files used by the app which contain personal data
+config.cfg
+cookies.lwp
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

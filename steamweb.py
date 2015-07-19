@@ -8,7 +8,7 @@ from cookielib import LWPCookieJar
 import ConfigParser
 from base64 import b64encode
 
-class SteamWebBrowser():
+class SteamWebBrowser(object):
     cfg = None
     browser = None
     rsa_cipher = None
@@ -18,20 +18,15 @@ class SteamWebBrowser():
     def __init__(self):
         self.cfg = ConfigParser.ConfigParser()
         script_dir = os.path.dirname(__file__)
-        if not os.path.exists(os.path.join(script_dir, 'config.cfg')):
-            self.cfg.add_section('steamweb')
-            self.cfg.set('steamweb', 'username', raw_input('Username: '))
-            self.cfg.set('steamweb', 'password', raw_input('Password: '))
-            with open(os.path.join(script_dir, 'config.cfg'), 'wb') as config:
-                self.cfg.write(config)
-        else:
-            self.cfg.read(os.path.join(script_dir, 'config.cfg'))
+        cfg_path = os.path.join(script_dir, 'config.cfg')
+        if os.path.isfile(cfg_path):
+            self.cfg.read(cfg_path)
+        self._init_config(cfg_path)
         
         user_agent = 'Mozilla/5.0 (compatible, MSIE 11, Windows NT 6.3; Trident/7.0; rv:11.0) like Gecko'
         cookie_file = os.path.join(script_dir, 'cookies.lwp')
 
         self.session = requests.Session()
-
         self.session.mount("http://", requests.adapters.HTTPAdapter(max_retries=2))
         self.session.mount("https://", requests.adapters.HTTPAdapter(max_retries=2))
         
@@ -49,7 +44,23 @@ class SteamWebBrowser():
 
     def _save_cookies(self):
         return self.session.cookies.save(ignore_discard=True, ignore_expires=False)
-    
+
+    def _init_config(self, cfg_path):
+        cfg_changed = False
+        if not self.cfg.has_section('steamweb'):
+            self.cfg.add_section('steamweb')
+            cfg_changed = True
+        if not self.cfg.has_option('steamweb', 'username'):
+            self.cfg.set('steamweb', 'username', raw_input('Your Steam username: '))
+            cfg_changed = True
+        if not self.cfg.has_option('steamweb', 'password'):
+            from getpass import getpass
+            self.cfg.set('steamweb', 'password', getpass('Password: '))
+            cfg_changed = True
+        if cfg_changed:
+            with open(cfg_path, 'wb') as cfg_fd:
+                self.cfg.write(cfg_fd)
+
     def post(self, url, data=None, **kwargs):
         return self.session.post(url, data, **kwargs)
 
@@ -141,9 +152,9 @@ class SteamWebBrowser():
         if req.ok:
             #self._log_cookies('login')
             data = req.json()
-            if 'message' in data:
-                print 'MSG:', data['message']
-                if data['message'] == 'Incorrect login.':
+            if data.get('message'):
+                print 'MSG:', data.get('message')
+                if data.get('message') == 'Incorrect login.':
                     return
 
             if data['success']:
@@ -157,7 +168,7 @@ class SteamWebBrowser():
                 self._save_cookies()
                 return True
 
-            elif 'captcha_needed' in data and data['captcha_needed'] and data['captcha_gid'] != '-1':
+            elif data.get('captcha_needed', False) and data.get('captcha_gid', '-1') != '-1':
                 imgdata = self.get('https://steamcommunity.com/public/captcha.php',
                                             params={'gid': data['captcha_gid']})
                 if imgdata.ok:
@@ -177,7 +188,7 @@ class SteamWebBrowser():
                     print 'Failed to get captcha'
                     return False
 
-            elif 'emailauth_needed' in data and data['emailauth_needed']:
+            elif data.get('emailauth_needed', False):
                 print 'SteamGuard requires email authentication...'
                 print 'Please enter the code send to your mail addres at "%s":' % data['emaildomain']
                 emailauth = raw_input('Enter code: ')
@@ -192,5 +203,10 @@ class SteamWebBrowser():
                 return False
 
 if __name__ == '__main__':
+    from bs4 import BeautifulSoup
     swb = SteamWebBrowser()
-    swb.login()
+    if not swb.logged_in():
+        swb.login()
+    r = swb.get('https://store.steampowered.com/account/')
+    soup = BeautifulSoup(r.content)
+    print 'Yout wallet balance:', soup.find('div', attrs={'class': 'accountData price'}).get_text()

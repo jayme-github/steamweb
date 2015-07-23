@@ -19,18 +19,16 @@ class SteamWebBrowser(object):
         self.cfg_dir = self._build_config_path()
         self.cfg = ConfigParser.ConfigParser()
         cfg_path = os.path.join(self.cfg_dir, 'config.cfg')
+        cookie_file = os.path.join(self.cfg_dir, 'cookies.lwp')
         if os.path.isfile(cfg_path):
             self.cfg.read(cfg_path)
         self._init_config(cfg_path)
-
-        user_agent = 'Mozilla/5.0 (compatible, MSIE 11, Windows NT 6.3; Trident/7.0; rv:11.0) like Gecko'
-        cookie_file = os.path.join(self.cfg_dir, 'cookies.lwp')
 
         self.session = requests.Session()
         self.session.mount("http://", requests.adapters.HTTPAdapter(max_retries=2))
         self.session.mount("https://", requests.adapters.HTTPAdapter(max_retries=2))
 
-        self.session.headers.update({'User-Agent' : user_agent})
+        self.session.headers.update({'User-Agent' : self.cfg.get('steamweb', 'useragent')})
         self.session.cookies = LWPCookieJar(cookie_file)
         if not os.path.exists(cookie_file):
             # initialize new (empty) cookie file
@@ -54,7 +52,6 @@ class SteamWebBrowser(object):
             confighome = os.path.join(os.environ['HOME'], '.config')
         cfg_dir = os.path.join(confighome, self.__class__.__name__)
         for p in [p for p in (confighome, cfg_dir) if not os.path.isdir(p)]:
-            print 'created ', p
             os.mkdir(p, 0700)
         return cfg_dir
 
@@ -70,6 +67,14 @@ class SteamWebBrowser(object):
             from getpass import getpass
             self.cfg.set('steamweb', 'password', getpass('Password: '))
             cfg_changed = True
+        if not self.cfg.has_option('steamweb', 'useragent'):
+            self.cfg.set(
+                'steamweb',
+                'useragent',
+                'Mozilla/5.0 (compatible, MSIE 11, Windows NT 6.3; Trident/7.0; rv:11.0) like Gecko'
+            )
+            cfg_changed = True
+
         if cfg_changed:
             with open(cfg_path, 'wb') as cfg_fd:
                 self.cfg.write(cfg_fd)

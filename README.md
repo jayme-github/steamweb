@@ -1,18 +1,22 @@
 # steamweb
-Python lib to access/use steam web pages (stuff not exposed via API
+Python lib to access/use steam web pages (stuff not exposed via API)
 
-Create a file `config.cfg` like
+Installation with pip:
+```sh
+pip install git+https://github.com/jayme-github/steamweb
+```
+
+`SteamWebBrowser` will ask for your Steam credentials when first used.
+You may create a config file manually if you whish (`~/.config/SteamWebBrowser/config.cfg`):
 ```cfg
 [steamweb]
 username = YOURSTEAMUSERNAME
 password = YOURSTEAMPASSWORD
 ```
 
-
-
-Usage like:
+Usage like (or see demo):
 ```python
-from steamweb import SteamWebBrowser
+from steamweb import *
 swb = SteamWebBrowser()
 if not swb.logged_in():
     swb.login()

@@ -35,13 +35,13 @@ class SteamWebBrowser(object):
             self._save_cookies()
         else:
             # load cookies
-            self.session.cookies.load(ignore_discard=True, ignore_expires=True)
+            self.session.cookies.load(ignore_discard=True)
 
-    def __del___(self):
+    def __del__(self):
         self._save_cookies()
 
     def _save_cookies(self):
-        return self.session.cookies.save(ignore_discard=True, ignore_expires=False)
+        return self.session.cookies.save(ignore_discard=True)
 
     def _build_config_path(self):
         if 'APPDATA' in os.environ:
@@ -99,7 +99,7 @@ class SteamWebBrowser(object):
     def _get_donotcachetime(self):
         return int(round(time.time() * 1000))
 
-    def _log_cookies(self, prefix):
+    def _log_cookies(self, prefix=''):
         for c in self.session.cookies:
             print prefix, repr(c)
 

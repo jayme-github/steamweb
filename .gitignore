@@ -63,3 +63,4 @@ target/
 TODO
 python_interpreter_defaults
 .venv
+*.swp

@@ -7,7 +7,7 @@ with open('requirements.txt', 'r') as infile:
 
 setup(
     name = 'steamweb',
-    version = '0.1',
+    version = '0.2',
     description = 'lib to access/use steam web pages (stuff not exposed via API)',
     author = 'Jayme',
     author_email = 'tuxnet@gmail.com',

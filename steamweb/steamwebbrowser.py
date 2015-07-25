@@ -1,23 +1,37 @@
+from __future__ import print_function
 import time
 import re
 import os
 import requests
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_v1_5
-from cookielib import LWPCookieJar
-import ConfigParser
 from base64 import b64encode
+try:
+    # Python 3
+    from http.cookiejar import LWPCookieJar
+except ImportError:
+    # Python 2
+    from cookielib import LWPCookieJar
+try:
+    # Python 3
+    import configparser
+except ImportError:
+    # Python 2
+    import ConfigParser as configparser
+
+# Only needed when running Python 2
+from builtins import input, int
 
 class SteamWebBrowser(object):
     cfg = None
     browser = None
     rsa_cipher = None
     rsa_timestamp = None
-    re_nonascii = re.compile(ur'[^\x00-\x7F]')
+    re_nonascii = re.compile(r'[^\x00-\x7F]')
 
     def __init__(self):
         self.cfg_dir = self._build_config_path()
-        self.cfg = ConfigParser.ConfigParser()
+        self.cfg = configparser.ConfigParser()
         cfg_path = os.path.join(self.cfg_dir, 'config.cfg')
         cookie_file = os.path.join(self.cfg_dir, 'cookies.lwp')
         if os.path.isfile(cfg_path):
@@ -37,9 +51,6 @@ class SteamWebBrowser(object):
             # load cookies
             self.session.cookies.load(ignore_discard=True)
 
-    def __del__(self):
-        self._save_cookies()
-
     def _save_cookies(self):
         return self.session.cookies.save(ignore_discard=True)
 
@@ -52,7 +63,7 @@ class SteamWebBrowser(object):
             confighome = os.path.join(os.environ['HOME'], '.config')
         cfg_dir = os.path.join(confighome, self.__class__.__name__)
         for p in [p for p in (confighome, cfg_dir) if not os.path.isdir(p)]:
-            os.mkdir(p, 0700)
+            os.mkdir(p, 0o700)
         return cfg_dir
 
     def _init_config(self, cfg_path):
@@ -61,7 +72,7 @@ class SteamWebBrowser(object):
             self.cfg.add_section('steamweb')
             cfg_changed = True
         if not self.cfg.has_option('steamweb', 'username'):
-            self.cfg.set('steamweb', 'username', raw_input('Your Steam username: '))
+            self.cfg.set('steamweb', 'username', input('Your Steam username: '))
             cfg_changed = True
         if not self.cfg.has_option('steamweb', 'password'):
             from getpass import getpass
@@ -80,13 +91,23 @@ class SteamWebBrowser(object):
                 self.cfg.write(cfg_fd)
 
     def post(self, url, data=None, **kwargs):
-        return self.session.post(url, data, **kwargs)
+        h = self._hash_cookies()
+        r = self.session.post(url, data, **kwargs)
+        if h != self._hash_cookies():
+            # Cookies have changed
+            self._save_cookies()
+        return r
 
     def get(self, url, **kwargs):
-        return self.session.get(url, **kwargs)
+        h = self._hash_cookies()
+        r = self.session.get(url, **kwargs)
+        if h != self._hash_cookies():
+            # Cookies have changed
+            self._save_cookies()
+        return r
 
     def _remove_nonascii(self, instr):
-        return self.re_nonascii.sub('', instr)
+        return self.re_nonascii.sub('', instr).encode('ascii')
 
     @property
     def _username(self):
@@ -101,12 +122,18 @@ class SteamWebBrowser(object):
 
     def _log_cookies(self, prefix=''):
         for c in self.session.cookies:
-            print prefix, repr(c)
+            print(prefix, repr(c))
 
     def _has_cookie(self, name, domain='steamcommunity.com'):
-        if len(filter(lambda x: x.name==name and x.domain==domain, self.session.cookies)) > 0:
+        if len([c for c in self.session.cookies if c.name==name and c.domain==domain]) > 0:
             return True
         return False
+
+    def _hash_cookies(self):
+        ''' Returns the hash of a list of hashes from sorted repr() of every cookie in jar as
+            LWPCookieJar does not change it's hash when cookies change.
+        '''
+        return hash(frozenset([hash(c) for c in sorted([repr(c) for c in self.session.cookies])]))
 
     def _get_rsa_key(self):
         ''' get steam RSA key, build and return cipher '''
@@ -121,8 +148,8 @@ class SteamWebBrowser(object):
             data = req.json()
             if data['success'] == True:
                 # Construct RSA and cipher
-                mod = long(str(data['publickey_mod']), 16)
-                exp = long(str(data['publickey_exp']), 16)
+                mod = int(str(data['publickey_mod']), 16)
+                exp = int(str(data['publickey_exp']), 16)
                 rsa = RSA.construct((mod, exp))
                 self.rsa_cipher = PKCS1_v1_5.new(rsa)
                 self.rsa_timestamp = data['timestamp']
@@ -171,7 +198,7 @@ class SteamWebBrowser(object):
             #self._log_cookies('login')
             data = req.json()
             if data.get('message'):
-                print 'MSG:', data.get('message')
+                print('MSG:', data.get('message'))
                 if data.get('message') == 'Incorrect login.':
                     return
 
@@ -180,10 +207,10 @@ class SteamWebBrowser(object):
                 data['transfer_parameters']['remember_login'] = True
                 req = self.post(data['transfer_url'], data['transfer_parameters'])
                 if not req.ok:
-                    print 'WARNING: transfer failed: "%s"' % req.content
+                    print('WARNING: transfer failed: "%s"' % req.content)
 
                 # Logged in (at least a bit). Save cookies to disk
-                self._save_cookies()
+                #self._save_cookies()
                 return True
 
             elif data.get('captcha_needed', False) and data.get('captcha_gid', '-1') != '-1':
@@ -194,28 +221,28 @@ class SteamWebBrowser(object):
                     tmpf = NamedTemporaryFile(suffix='.png')
                     tmpf.write(imgdata.content)
                     tmpf.flush()
-                    print 'Please take a look at the captcha image "%s" and provide the code:' % tmpf.name
-                    captcha_text = raw_input('Enter code: ')
+                    print('Please take a look at the captcha image "%s" and provide the code:' % tmpf.name)
+                    captcha_text = input('Enter code: ')
                     tmpf.close()
                     if captcha_text:
                         return self.login(captchagid=data['captcha_gid'], captcha_text=captcha_text)
                     else:
-                        print 'No captcha code given'
+                        print('No captcha code given')
                         return False
                 else:
-                    print 'Failed to get captcha'
+                    print('Failed to get captcha')
                     return False
 
             elif data.get('emailauth_needed', False):
-                print 'SteamGuard requires email authentication...'
-                print 'Please enter the code send to your mail addres at "%s":' % data['emaildomain']
-                emailauth = raw_input('Enter code: ')
+                print('SteamGuard requires email authentication...')
+                print('Please enter the code send to your mail addres at "%s":' % data['emaildomain'])
+                emailauth = input('Enter code: ')
                 emailauth.upper()
                 if emailauth:
                     return self.login(emailauth=emailauth, emailsteamid=data['emailsteamid'])
                 else:
-                    print 'No email auth code given'
+                    print('No email auth code given')
                     return False
             else:
-                print 'Error, could not login:', data
+                print('Error, could not login:', data)
                 return False

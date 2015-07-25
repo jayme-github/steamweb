@@ -1,1 +1,1 @@
-from steamwebbrowser import SteamWebBrowser
+from .steamwebbrowser import SteamWebBrowser

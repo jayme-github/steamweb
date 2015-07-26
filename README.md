@@ -1,5 +1,5 @@
 # steamweb
-Python lib to access/use steam web pages (stuff not exposed via API)
+Python lib to access/use steam web pages (stuff not exposed via [the API](https://developer.valvesoftware.com/wiki/Steam_Web_API))
 
 Installation with pip:
 ```sh
@@ -12,6 +12,7 @@ You may create a config file manually if you whish (`~/.config/SteamWebBrowser/c
 [steamweb]
 username = YOURSTEAMUSERNAME
 password = YOURSTEAMPASSWORD
+tkinter = True/False (Select True to allow GUI via tkinter)
 ```
 
 Usage like (or see demo):

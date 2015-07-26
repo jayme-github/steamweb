@@ -243,6 +243,12 @@ class SteamWebBrowser(object):
                 else:
                     print('No email auth code given')
                     return False
+            elif data.get('requires_twofactor', False):
+                print('SteamGuard requires mobile authentication...')
+                twofactorcode = input('Please enter the code sent to your phone:')
+                twofactorcode.upper()
+                if twofactorcode:
+                    return self.login(twofactorcode=twofactorcode)
             else:
                 print('Error, could not login:', data)
                 return False

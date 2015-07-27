@@ -1,5 +1,5 @@
 # steamweb
-Python lib to access/use steam web pages (stuff not exposed via API)
+Python lib to access/use steam web pages (stuff not exposed via [the API](https://developer.valvesoftware.com/wiki/Steam_Web_API))
 
 Installation with pip:
 ```sh

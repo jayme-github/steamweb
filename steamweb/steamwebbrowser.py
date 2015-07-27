@@ -55,7 +55,7 @@ class SteamWebBrowser(object):
 
     @property
     def appdata_path(self):
-        if getattr(self, '_appdata_path', False):
+        if not getattr(self, '_appdata_path', False):
             # Determine and create path if not exist
             if 'APPDATA' in os.environ:
                 confighome = os.environ['APPDATA']
@@ -237,17 +237,12 @@ class SteamWebBrowserCfg(SteamWebBrowser):
         self._init_config(self.appdata_path)
 
         # Init superclass with username and password from config
-        super(SteamWebBrowserCfg, self).__init__(self._username, self._password)
+        super(SteamWebBrowserCfg, self).__init__(
+                self.cfg.get('steamweb', 'username').strip(),
+                self.cfg.get('steamweb', 'password').strip()
+        )
         # Overwrite User-Agent with the one in config
         self.set_useragent(self.cfg.get('steamweb', 'useragent'))
-
-    @property
-    def _username(self):
-        return self._remove_nonascii(self.cfg.get('steamweb', 'username').strip())
-
-    @property
-    def _password(self):
-        return self._remove_nonascii(self.cfg.get('steamweb', 'password').strip())
 
     def _init_config(self, cfg_path):
         cfg_changed = False

@@ -22,27 +22,26 @@ except ImportError:
 # Only needed when running Python 2
 from builtins import input, int
 
+DEFAULT_USERAGENT = 'Mozilla/5.0 (compatible, MSIE 11, Windows NT 6.3; Trident/7.0; rv:11.0) like Gecko'
+
 class SteamWebBrowser(object):
-    cfg = None
+    name = 'SteamWebBrowser'
     browser = None
     rsa_cipher = None
     rsa_timestamp = None
     re_nonascii = re.compile(r'[^\x00-\x7F]')
 
-    def __init__(self):
-        self.cfg_dir = self._build_config_path()
-        self.cfg = configparser.ConfigParser()
-        cfg_path = os.path.join(self.cfg_dir, 'config.cfg')
-        cookie_file = os.path.join(self.cfg_dir, 'cookies.lwp')
-        if os.path.isfile(cfg_path):
-            self.cfg.read(cfg_path)
-        self._init_config(cfg_path)
+    def __init__(self, username=None, password=None):
+        self._username = self._remove_nonascii(username)
+        self._password = self._remove_nonascii(password)
+
+        cookie_file = os.path.join(self.appdata_path, 'cookies.lwp')
 
         self.session = requests.Session()
         self.session.mount("http://", requests.adapters.HTTPAdapter(max_retries=2))
         self.session.mount("https://", requests.adapters.HTTPAdapter(max_retries=2))
+        self.set_useragent()
 
-        self.session.headers.update({'User-Agent' : self.cfg.get('steamweb', 'useragent')})
         self.session.cookies = LWPCookieJar(cookie_file)
         if not os.path.exists(cookie_file):
             # initialize new (empty) cookie file
@@ -54,41 +53,24 @@ class SteamWebBrowser(object):
     def _save_cookies(self):
         return self.session.cookies.save(ignore_discard=True)
 
-    def _build_config_path(self):
-        if 'APPDATA' in os.environ:
-            confighome = os.environ['APPDATA']
-        elif 'XDG_CONFIG_HOME' in os.environ:
-            confighome = os.environ['XDG_CONFIG_HOME']
-        else:
-            confighome = os.path.join(os.environ['HOME'], '.config')
-        cfg_dir = os.path.join(confighome, self.__class__.__name__)
-        for p in [p for p in (confighome, cfg_dir) if not os.path.isdir(p)]:
-            os.mkdir(p, 0o700)
-        return cfg_dir
+    @property
+    def appdata_path(self):
+        if getattr(self, '_appdata_path', False):
+            # Determine and create path if not exist
+            if 'APPDATA' in os.environ:
+                confighome = os.environ['APPDATA']
+            elif 'XDG_CONFIG_HOME' in os.environ:
+                confighome = os.environ['XDG_CONFIG_HOME']
+            else:
+                confighome = os.path.join(os.environ['HOME'], '.config')
+            # Store it for later reference and create it if it does not exist
+            self._appdata_path = os.path.join(confighome, self.name)
+            for p in [p for p in (confighome, self._appdata_path) if not os.path.isdir(p)]:
+                os.mkdir(p, 0o700)
+        return self._appdata_path
 
-    def _init_config(self, cfg_path):
-        cfg_changed = False
-        if not self.cfg.has_section('steamweb'):
-            self.cfg.add_section('steamweb')
-            cfg_changed = True
-        if not self.cfg.has_option('steamweb', 'username'):
-            self.cfg.set('steamweb', 'username', input('Your Steam username: '))
-            cfg_changed = True
-        if not self.cfg.has_option('steamweb', 'password'):
-            from getpass import getpass
-            self.cfg.set('steamweb', 'password', getpass('Password: '))
-            cfg_changed = True
-        if not self.cfg.has_option('steamweb', 'useragent'):
-            self.cfg.set(
-                'steamweb',
-                'useragent',
-                'Mozilla/5.0 (compatible, MSIE 11, Windows NT 6.3; Trident/7.0; rv:11.0) like Gecko'
-            )
-            cfg_changed = True
-
-        if cfg_changed:
-            with open(cfg_path, 'wb') as cfg_fd:
-                self.cfg.write(cfg_fd)
+    def set_useragent(self, useragent=DEFAULT_USERAGENT):
+        self.session.headers.update({'User-Agent': useragent})
 
     def post(self, url, data=None, **kwargs):
         h = self._hash_cookies()
@@ -109,15 +91,8 @@ class SteamWebBrowser(object):
     def _remove_nonascii(self, instr):
         return self.re_nonascii.sub('', instr).encode('ascii')
 
-    @property
-    def _username(self):
-        return self._remove_nonascii(self.cfg.get('steamweb', 'username').strip())
-
-    @property
-    def _password(self):
-        return self._remove_nonascii(self.cfg.get('steamweb', 'password').strip())
-
-    def _get_donotcachetime(self):
+    @staticmethod
+    def _get_donotcachetime():
         return int(round(time.time() * 1000))
 
     def _log_cookies(self, prefix=''):
@@ -143,7 +118,6 @@ class SteamWebBrowser(object):
                 'donotcache' : self._get_donotcachetime(),
         }
         req = self.post(url, data=values)
-        #self._log_cookies('_get_rsa_key')
         if req.ok:
             data = req.json()
             if data['success'] == True:
@@ -195,7 +169,6 @@ class SteamWebBrowser(object):
         }
         req = self.post(url, data=values)
         if req.ok:
-            #self._log_cookies('login')
             data = req.json()
             if data.get('message'):
                 print('MSG:', data.get('message'))
@@ -209,8 +182,7 @@ class SteamWebBrowser(object):
                 if not req.ok:
                     print('WARNING: transfer failed: "%s"' % req.content)
 
-                # Logged in (at least a bit). Save cookies to disk
-                #self._save_cookies()
+                # Logged in (at least a bit)
                 return True
 
             elif data.get('captcha_needed', False) and data.get('captcha_gid', '-1') != '-1':
@@ -252,3 +224,51 @@ class SteamWebBrowser(object):
             else:
                 print('Error, could not login:', data)
                 return False
+
+
+class SteamWebBrowserCfg(SteamWebBrowser):
+    ''' SteamWebBrowser with build in config file support
+    '''
+    def __init__(self):
+        self.cfg = configparser.ConfigParser()
+        cfg_path = os.path.join(self.appdata_path, 'config.cfg')
+        if os.path.isfile(cfg_path):
+            self.cfg.read(cfg_path)
+        self._init_config(self.appdata_path)
+
+        # Init superclass with username and password from config
+        super(SteamWebBrowserCfg, self).__init__(self._username, self._password)
+        # Overwrite User-Agent with the one in config
+        self.set_useragent(self.cfg.get('steamweb', 'useragent'))
+
+    @property
+    def _username(self):
+        return self._remove_nonascii(self.cfg.get('steamweb', 'username').strip())
+
+    @property
+    def _password(self):
+        return self._remove_nonascii(self.cfg.get('steamweb', 'password').strip())
+
+    def _init_config(self, cfg_path):
+        cfg_changed = False
+        if not self.cfg.has_section('steamweb'):
+            self.cfg.add_section('steamweb')
+            cfg_changed = True
+        if not self.cfg.has_option('steamweb', 'username'):
+            self.cfg.set('steamweb', 'username', input('Your Steam username: '))
+            cfg_changed = True
+        if not self.cfg.has_option('steamweb', 'password'):
+            from getpass import getpass
+            self.cfg.set('steamweb', 'password', getpass('Password: '))
+            cfg_changed = True
+        if not self.cfg.has_option('steamweb', 'useragent'):
+            self.cfg.set(
+                'steamweb',
+                'useragent',
+                DEFAULT_USERAGENT
+            )
+            cfg_changed = True
+
+        if cfg_changed:
+            with open(cfg_path, 'wb') as cfg_fd:
+                self.cfg.write(cfg_fd)

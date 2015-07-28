@@ -6,21 +6,14 @@ import requests
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_v1_5
 from base64 import b64encode
-try:
-    # Python 3
+from sys import version_info
+if version_info >= 3: # Python 3
     from http.cookiejar import LWPCookieJar
-except ImportError:
-    # Python 2
-    from cookielib import LWPCookieJar
-try:
-    # Python 3
     import configparser
-except ImportError:
-    # Python 2
+else: # Python 2
+    from cookielib import LWPCookieJar
     import ConfigParser as configparser
-
-# Only needed when running Python 2
-from builtins import input, int
+    from builtins import input, int
 
 DEFAULT_USERAGENT = 'Mozilla/5.0 (compatible, MSIE 11, Windows NT 6.3; Trident/7.0; rv:11.0) like Gecko'
 
@@ -118,19 +111,19 @@ class SteamWebBrowser(object):
                 'donotcache' : self._get_donotcachetime(),
         }
         req = self.post(url, data=values)
-        if req.ok:
-            data = req.json()
-            if data['success'] == True:
-                # Construct RSA and cipher
-                mod = int(str(data['publickey_mod']), 16)
-                exp = int(str(data['publickey_exp']), 16)
-                rsa = RSA.construct((mod, exp))
-                self.rsa_cipher = PKCS1_v1_5.new(rsa)
-                self.rsa_timestamp = data['timestamp']
-            else:
-                raise Exception('Failed to get RSA key: %s' % data)
-        else:
+        if not req.ok:
+            #FIXME: Raise proper exception
             raise Exception('Failed to get RSA key: %d' % req.status_code)
+        data = req.json()
+        if not data['success']:
+            #FIXME: Raise proper exception
+            raise Exception('Failed to get RSA key: %s' % data)
+        # Construct RSA and cipher
+        mod = int(str(data['publickey_mod']), 16)
+        exp = int(str(data['publickey_exp']), 16)
+        rsa = RSA.construct((mod, exp))
+        self.rsa_cipher = PKCS1_v1_5.new(rsa)
+        self.rsa_timestamp = data['timestamp']
 
     def _get_encrypted_password(self):
         if not self.rsa_cipher:
@@ -140,13 +133,8 @@ class SteamWebBrowser(object):
 
     def logged_in(self):
         r = self.get('https://store.steampowered.com/account/')
-        if r.ok:
-            if r.url != 'https://store.steampowered.com/account/':
-                # Will be redirected if not logged in
-                return False
-            else:
-                return True
-        return False
+        # Will be redirected if not logged in
+        return r.ok and r.url == 'https://store.steampowered.com/account/'
 
     def login(self, captchagid='-1', captcha_text='', emailauth='', emailsteamid='', loginfriendlyname='', twofactorcode=''):
         # Force a new RSA key request for every call
@@ -167,64 +155,74 @@ class SteamWebBrowser(object):
                 'donotcache': self._get_donotcachetime(),
                 'twofactorcode' : twofactorcode,
         }
+
         req = self.post(url, data=values)
-        if req.ok:
-            data = req.json()
-            if data.get('message'):
-                print('MSG:', data.get('message'))
-                if data.get('message') == 'Incorrect login.':
-                    return
-
-            if data['success']:
-                # Transfer to get the cookies for the store page too
-                data['transfer_parameters']['remember_login'] = True
-                req = self.post(data['transfer_url'], data['transfer_parameters'])
-                if not req.ok:
-                    print('WARNING: transfer failed: "%s"' % req.content)
-
-                # Logged in (at least a bit)
-                return True
-
-            elif data.get('captcha_needed', False) and data.get('captcha_gid', '-1') != '-1':
-                imgdata = self.get('https://steamcommunity.com/public/captcha.php',
-                                            params={'gid': data['captcha_gid']})
-                if imgdata.ok:
-                    from tempfile import NamedTemporaryFile
-                    tmpf = NamedTemporaryFile(suffix='.png')
-                    tmpf.write(imgdata.content)
-                    tmpf.flush()
-                    print('Please take a look at the captcha image "%s" and provide the code:' % tmpf.name)
-                    captcha_text = input('Enter code: ')
-                    tmpf.close()
-                    if captcha_text:
-                        return self.login(captchagid=data['captcha_gid'], captcha_text=captcha_text)
-                    else:
-                        print('No captcha code given')
-                        return False
-                else:
-                    print('Failed to get captcha')
-                    return False
-
-            elif data.get('emailauth_needed', False):
-                print('SteamGuard requires email authentication...')
-                print('Please enter the code send to your mail addres at "%s":' % data['emaildomain'])
-                emailauth = input('Enter code: ')
-                emailauth.upper()
-                if emailauth:
-                    return self.login(emailauth=emailauth, emailsteamid=data['emailsteamid'])
-                else:
-                    print('No email auth code given')
-                    return False
-            elif data.get('requires_twofactor', False):
-                print('SteamGuard requires mobile authentication...')
-                twofactorcode = input('Please enter the code sent to your phone:')
-                twofactorcode.upper()
-                if twofactorcode:
-                    return self.login(twofactorcode=twofactorcode)
-            else:
-                print('Error, could not login:', data)
+        if not req.ok:
+            #FIXME: Raise proper exception
+            return
+        data = req.json()
+        if data.get('message'):
+            print('MSG:', data.get('message'))
+            if data.get('message') == 'Incorrect login.':
+                #FIXME: Raise proper exception
                 return False
 
+        if data['success']:
+            # Transfer to get the cookies for the store page too
+            data['transfer_parameters']['remember_login'] = True
+            req = self.post(data['transfer_url'], data['transfer_parameters'])
+            if not req.ok:
+                print('WARNING: transfer failed: "%s"' % req.content)
+
+            # Logged in (at least a bit)
+            return True
+
+        elif data.get('captcha_needed', False) and data.get('captcha_gid', '-1') != '-1':
+            imgdata = self.get('https://steamcommunity.com/public/captcha.php',
+                                        params={'gid': data['captcha_gid']})
+            if imgdata.ok:
+                from tempfile import NamedTemporaryFile
+                tmpf = NamedTemporaryFile(suffix='.png')
+                tmpf.write(imgdata.content)
+                tmpf.flush()
+                print('Please take a look at the captcha image "%s" and provide the code:' % tmpf.name)
+                captcha_text = input('Enter code: ')
+                tmpf.close()
+                if captcha_text:
+                    return self.login(captchagid=data['captcha_gid'], captcha_text=captcha_text)
+                else:
+                    print('No captcha code given')
+                    #FIXME: Raise proper exception
+                    return False
+            else:
+                print('Failed to get captcha')
+                #FIXME: Raise proper exception
+                return False
+
+        elif data.get('emailauth_needed', False):
+            print('SteamGuard requires email authentication...')
+            print('Please enter the code sent to your mail addres at "%s":' % data['emaildomain'])
+            emailauth = input('Enter code: ')
+            emailauth.upper()
+            if emailauth:
+                return self.login(emailauth=emailauth, emailsteamid=data['emailsteamid'])
+            else:
+                print('No email auth code given')
+                #FIXME: Raise proper exception
+                return False
+        elif data.get('requires_twofactor', False):
+            print('SteamGuard requires mobile authentication...')
+            twofactorcode = input('Please enter the code sent to your phone:')
+            twofactorcode.upper()
+            if twofactorcode:
+                return self.login(twofactorcode=twofactorcode)
+            else:
+                #FIXME: Raise proper exception
+                return False
+        else:
+            print('Error, could not login:', data)
+            #FIXME: Raise proper exception
+            return False
 
 class SteamWebBrowserCfg(SteamWebBrowser):
     ''' SteamWebBrowser with build in config file support

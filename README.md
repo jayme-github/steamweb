@@ -6,7 +6,7 @@ Installation with pip:
 pip install git+https://github.com/jayme-github/steamweb
 ```
 
-`SteamWebBrowser` will ask for your Steam credentials when first used.
+`SteamWebBrowserCfg` will ask for your Steam credentials when first used.
 You may create a config file manually if you whish (`~/.config/SteamWebBrowser/config.cfg`):
 ```cfg
 [steamweb]

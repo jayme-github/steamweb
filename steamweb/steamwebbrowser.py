@@ -265,13 +265,13 @@ class SteamWebBrowser(object):
             if data.get('message') == 'Incorrect login.':
                 raise IncorrectLoginError(data.get('message'))
 
-        if data['success']:
+        if data['success'] == True:
             # Transfer to get the cookies for the store page too
             data['transfer_parameters']['remember_login'] = True
             req = self.post(data['transfer_url'], data['transfer_parameters'])
             # Logged in
 
-        elif data.get('captcha_needed', False) and data.get('captcha_gid', '-1') != '-1':
+        elif data.get('captcha_needed') == True and data.get('captcha_gid', '-1') != '-1':
             imgdata = self.get('https://steamcommunity.com/public/captcha.php',
                                         params={'gid': data['captcha_gid']})
             captcha_text = self._handle_captcha(imgdata.content, data.get('message', ''))
@@ -279,13 +279,13 @@ class SteamWebBrowser(object):
                 raise NoCaptchaCodeError('Captcha code not provided.')
             return self.login(captchagid=data['captcha_gid'], captcha_text=captcha_text)
 
-        elif data.get('emailauth_needed', False):
+        elif data.get('emailauth_needed') == True:
             emailauth = self._handle_emailauth(data['emaildomain'], data.get('message', ''))
             if not emailauth:
                 raise NoEmailCodeError('E-mail code not provided.')
             return self.login(emailauth=emailauth, emailsteamid=data['emailsteamid'])
 
-        elif data.get('requires_twofactor', False):
+        elif data.get('requires_twofactor') == True:
             twofactorcode = self._handle_twofactor(data.get('message', ''))
             if not twofactorcode:
                 raise NoTwoFactorCodeError('Two factor code not provided.')

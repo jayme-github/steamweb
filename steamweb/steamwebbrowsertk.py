@@ -18,15 +18,25 @@ class SteamWebBrowserTk(SteamWebBrowserCfg):
         tk_root.title('')
         tk_root.configure(bg='black')
         captcha = PhotoImage(data=captcha_data)
-        tk.Label(tk_root, text=message, bg='black', fg='white').pack()
-        tk.Label(tk_root, image=captcha, bg='black').pack()
+        tk.Label(
+                tk_root,
+                text=message,
+                bg='black',
+                fg='white',
+        ).pack()
+        tk.Label(
+                tk_root,
+                image=captcha,
+                bg='black',
+                fg='white',
+        ).pack()
         captcha_text = tk.StringVar()
         tk.Entry(
                 tk_root,
                 textvariable=captcha_text,
                 bg='black',
                 fg='white',
-                insertbackground='white'
+                insertbackground='white',
         ).pack()
         tk_root.bind('<Return>', lambda s: close(captcha_text))
         tk_root.mainloop()

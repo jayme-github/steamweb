@@ -136,6 +136,61 @@ class SteamWebBrowser(object):
         # Will be redirected if not logged in
         return r.ok and r.url == 'https://store.steampowered.com/account/'
 
+    @staticmethod
+    def _handle_captcha(captcha_data, message=''):
+        ''' Called when a captcha must be solved
+        Writes the image to a temporary file and asks the user to enter the code.
+
+        Args:
+            captcha_data: Bytestring of the PNG captcha image.
+            message: Optional. A message from Steam service.
+
+        Returns:
+            A string containing the solved captcha code.
+        '''
+        from tempfile import NamedTemporaryFile
+        tmpf = NamedTemporaryFile(suffix='.png')
+        tmpf.write(imgdata.content)
+        tmpf.flush()
+        print('Please take a look at the captcha image "%s" and provide the code:' % tmpf.name)
+        captcha_text = input('Enter code: ')
+        tmpf.close()
+        return captcha_text
+
+    @staticmethod
+    def _handle_emailauth(maildomain='', message=''):
+        ''' Called when SteamGuard requires authentication via e-mail.
+        Asks the user to enter the code.
+
+        Args:
+            maildomain: Optional. The mail domain of the e-mail address the SteamGuard
+                code is send to.
+            message: Optional. A message from Steam service.
+
+        Returns:
+            A string containing the code.
+        '''
+        print('SteamGuard requires email authentication...')
+        emailauth = input('Please enter the code sent to your mail addres at "%s":' % maildomain)
+        emailauth.upper()
+        return emailauth
+
+    @staticmethod
+    def _handle_twofactor(message=''):
+        ''' Called when SteamGuard requires two-factor authentication..
+        Asks the user to enter the code.
+
+        Args:
+            message: Optional. A message from Steam service.
+
+        Returns:
+            A string containing the code.
+        '''
+        print('SteamGuard requires mobile authentication...')
+        twofactorcode = input('Please enter the code sent to your phone:')
+        twofactorcode.upper()
+        return twofactorcode
+
     def login(self, captchagid='-1', captcha_text='', emailauth='', emailsteamid='', loginfriendlyname='', twofactorcode=''):
         # Force a new RSA key request for every call
         self._get_rsa_key()
@@ -181,13 +236,7 @@ class SteamWebBrowser(object):
             imgdata = self.get('https://steamcommunity.com/public/captcha.php',
                                         params={'gid': data['captcha_gid']})
             if imgdata.ok:
-                from tempfile import NamedTemporaryFile
-                tmpf = NamedTemporaryFile(suffix='.png')
-                tmpf.write(imgdata.content)
-                tmpf.flush()
-                print('Please take a look at the captcha image "%s" and provide the code:' % tmpf.name)
-                captcha_text = input('Enter code: ')
-                tmpf.close()
+                captcha_text = self._handle_captcha(imgdata.content, data.get('message', ''))
                 if captcha_text:
                     return self.login(captchagid=data['captcha_gid'], captcha_text=captcha_text)
                 else:
@@ -200,25 +249,22 @@ class SteamWebBrowser(object):
                 return False
 
         elif data.get('emailauth_needed', False):
-            print('SteamGuard requires email authentication...')
-            print('Please enter the code sent to your mail addres at "%s":' % data['emaildomain'])
-            emailauth = input('Enter code: ')
-            emailauth.upper()
+            emailauth = self._handle_emailauth(data['emaildomain'], data.get('message', ''))
             if emailauth:
                 return self.login(emailauth=emailauth, emailsteamid=data['emailsteamid'])
             else:
                 print('No email auth code given')
                 #FIXME: Raise proper exception
                 return False
+
         elif data.get('requires_twofactor', False):
-            print('SteamGuard requires mobile authentication...')
-            twofactorcode = input('Please enter the code sent to your phone:')
-            twofactorcode.upper()
+            twofactorcode = self._handle_twofactor(data.get('message', ''))
             if twofactorcode:
                 return self.login(twofactorcode=twofactorcode)
             else:
                 #FIXME: Raise proper exception
                 return False
+
         else:
             print('Error, could not login:', data)
             #FIXME: Raise proper exception

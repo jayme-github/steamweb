@@ -7,7 +7,7 @@ from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_v1_5
 from base64 import b64encode
 from sys import version_info
-if version_info >= 3: # Python 3
+if version_info.major >= 3: # Python 3
     from http.cookiejar import LWPCookieJar
     import configparser
 else: # Python 2
@@ -150,7 +150,7 @@ class SteamWebBrowser(object):
         '''
         from tempfile import NamedTemporaryFile
         tmpf = NamedTemporaryFile(suffix='.png')
-        tmpf.write(imgdata.content)
+        tmpf.write(captcha_data)
         tmpf.flush()
         print('Please take a look at the captcha image "%s" and provide the code:' % tmpf.name)
         captcha_text = input('Enter code: ')
@@ -271,14 +271,14 @@ class SteamWebBrowser(object):
             return False
 
 class SteamWebBrowserCfg(SteamWebBrowser):
-    ''' SteamWebBrowser with build in config file support
+    ''' SteamWebBrowser with built-in config file support
     '''
     def __init__(self):
         self.cfg = configparser.ConfigParser()
         cfg_path = os.path.join(self.appdata_path, 'config.cfg')
         if os.path.isfile(cfg_path):
             self.cfg.read(cfg_path)
-        self._init_config(self.appdata_path)
+        self._init_config(cfg_path)
 
         # Init superclass with username and password from config
         super(SteamWebBrowserCfg, self).__init__(

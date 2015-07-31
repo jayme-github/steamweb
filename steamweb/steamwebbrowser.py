@@ -23,20 +23,19 @@ class SteamWebBrowser(object):
     rsa_cipher = None
     rsa_timestamp = None
     re_nonascii = re.compile(r'[^\x00-\x7F]')
-    re_fs_safe = re.compile(r'[^\w\d-_]')
+    re_fs_safe = re.compile(r'[^\w-]')
     
     def __init__(self, username=None, password=None):
         self._username = self._remove_nonascii(username)
         self._password = self._remove_nonascii(password)
         
-        safe_username = username._make_fs_safe(username)
-        cookie_file = os.path.join(self.appdata_path, safe_username+'.lwp')
         
         self.session = requests.Session()
         self.session.mount("http://", requests.adapters.HTTPAdapter(max_retries=2))
         self.session.mount("https://", requests.adapters.HTTPAdapter(max_retries=2))
         self.set_useragent()
 
+        cookie_file = os.path.join(self.appdata_path, self._make_fs_safe(username)+'.lwp')
         self.session.cookies = LWPCookieJar(cookie_file)
         if not os.path.exists(cookie_file):
             # initialize new (empty) cookie file
@@ -83,14 +82,17 @@ class SteamWebBrowser(object):
             self._save_cookies()
         return r
     
-    # Steam strips non-ascii characters before sending across the web. This is fairly standard practice, in fact.
     def _remove_nonascii(self, instr):
+        ''' Steam strips non-ascii characters before sending across the web.
+        '''
         return self.re_nonascii.sub('', instr).encode('ascii')
     
-    # Filesystem-safe names should avoid most non-word or digit values.
     def _make_fs_safe(self, instr):
+        ''' Returns a very conservative filesystem-safe name for instr.
+        It avoids most non-word or digit values as is max. 27 characters long
+        '''
         instr = self.re_fs_safe.sub('', instr).encode('ascii')
-        return instr[:28] # 27 + '.lwp' = 31, considered maximum
+        return instr[:27] # 27 + '.lwp' = 31, considered maximum
     
     @staticmethod
     def _get_donotcachetime():

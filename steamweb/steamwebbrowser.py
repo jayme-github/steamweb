@@ -91,7 +91,7 @@ class SteamWebBrowser(object):
         ''' Returns a very conservative filesystem-safe name for instr.
         It avoids most non-word or digit values as is max. 27 characters long
         '''
-        instr = self.re_fs_safe.sub('', instr).encode('ascii')
+        instr = self.re_fs_safe.sub('', instr)
         return instr[:27] # 27 + '.lwp' = 31, considered maximum
     
     @staticmethod

@@ -181,7 +181,7 @@ class SteamWebBrowser(object):
             A string containing the code.
         '''
         print('SteamGuard requires email authentication...')
-        emailauth = input('Please enter the code sent to your mail addres at "%s":' % maildomain)
+        emailauth = input('Please enter the code sent to your mail addres at "%s": ' % maildomain)
         emailauth.upper()
         return emailauth
 
@@ -197,7 +197,7 @@ class SteamWebBrowser(object):
             A string containing the code.
         '''
         print('SteamGuard requires mobile authentication...')
-        twofactorcode = input('Please enter the code sent to your phone:')
+        twofactorcode = input('Please enter the code sent to your phone: ')
         twofactorcode.upper()
         return twofactorcode
 

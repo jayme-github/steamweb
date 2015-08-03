@@ -17,6 +17,34 @@ else: # Python 2
 
 DEFAULT_USERAGENT = 'Mozilla/5.0 (compatible, MSIE 11, Windows NT 6.3; Trident/7.0; rv:11.0) like Gecko'
 
+class SteamWebError(Exception):
+    ''' Base class for exceptions in this module. '''
+    pass
+
+class LoginFailedError(SteamWebError):
+    ''' Raised when the login failed (for whatever reason) '''
+    pass
+
+class IncorrectLoginError(LoginFailedError):
+    ''' Raised when credentials are wrong '''
+    pass
+
+class InputError(SteamWebError):
+    ''' Base class for input errors '''
+    pass
+
+class NoCaptchaCodeError(InputError):
+    ''' Raised when no captcha code was given '''
+    pass
+
+class NoEmailCodeError(InputError):
+    ''' Raised when no email code was given '''
+    pass
+
+class NoTwoFactorCodeError(InputError):
+    ''' Raised then no two factor code was given '''
+    pass
+
 class SteamWebBrowser(object):
     name = 'SteamWebBrowser'
     browser = None
@@ -69,6 +97,8 @@ class SteamWebBrowser(object):
     def post(self, url, data=None, **kwargs):
         h = self._hash_cookies()
         r = self.session.post(url, data, **kwargs)
+        # Will raise HTTPError on 4XX client error or 5XX server error response
+        r.raise_for_status()
         if h != self._hash_cookies():
             # Cookies have changed
             self._save_cookies()
@@ -77,6 +107,8 @@ class SteamWebBrowser(object):
     def get(self, url, **kwargs):
         h = self._hash_cookies()
         r = self.session.get(url, **kwargs)
+        # Will raise HTTPError on 4XX client error or 5XX server error response
+        r.raise_for_status()
         if h != self._hash_cookies():
             # Cookies have changed
             self._save_cookies()
@@ -121,13 +153,9 @@ class SteamWebBrowser(object):
                 'donotcache' : self._get_donotcachetime(),
         }
         req = self.post(url, data=values)
-        if not req.ok:
-            #FIXME: Raise proper exception
-            raise Exception('Failed to get RSA key: %d' % req.status_code)
         data = req.json()
         if not data['success']:
-            #FIXME: Raise proper exception
-            raise Exception('Failed to get RSA key: %s' % data)
+            raise SteamWebError('Failed to get RSA key', data)
         # Construct RSA and cipher
         mod = int(str(data['publickey_mod']), 16)
         exp = int(str(data['publickey_exp']), 16)
@@ -144,7 +172,7 @@ class SteamWebBrowser(object):
     def logged_in(self):
         r = self.get('https://store.steampowered.com/account/')
         # Will be redirected if not logged in
-        return r.ok and r.url == 'https://store.steampowered.com/account/'
+        return r.url == 'https://store.steampowered.com/account/'
 
     @staticmethod
     def _handle_captcha(captcha_data, message=''):
@@ -222,63 +250,40 @@ class SteamWebBrowser(object):
         }
 
         req = self.post(url, data=values)
-        if not req.ok:
-            #FIXME: Raise proper exception
-            return
         data = req.json()
         if data.get('message'):
-            print('MSG:', data.get('message'))
+            # TODO: log message
             if data.get('message') == 'Incorrect login.':
-                #FIXME: Raise proper exception
-                return False
+                raise IncorrectLoginError(data.get('message'))
 
         if data['success']:
             # Transfer to get the cookies for the store page too
             data['transfer_parameters']['remember_login'] = True
             req = self.post(data['transfer_url'], data['transfer_parameters'])
-            if not req.ok:
-                print('WARNING: transfer failed: "%s"' % req.content)
-
-            # Logged in (at least a bit)
-            return True
+            # Logged in
 
         elif data.get('captcha_needed', False) and data.get('captcha_gid', '-1') != '-1':
             imgdata = self.get('https://steamcommunity.com/public/captcha.php',
                                         params={'gid': data['captcha_gid']})
-            if imgdata.ok:
-                captcha_text = self._handle_captcha(imgdata.content, data.get('message', ''))
-                if captcha_text:
-                    return self.login(captchagid=data['captcha_gid'], captcha_text=captcha_text)
-                else:
-                    print('No captcha code given')
-                    #FIXME: Raise proper exception
-                    return False
-            else:
-                print('Failed to get captcha')
-                #FIXME: Raise proper exception
-                return False
+            captcha_text = self._handle_captcha(imgdata.content, data.get('message', ''))
+            if not captcha_text:
+                raise NoCaptchaCodeError('Captcha code not provided.')
+            return self.login(captchagid=data['captcha_gid'], captcha_text=captcha_text)
 
         elif data.get('emailauth_needed', False):
             emailauth = self._handle_emailauth(data['emaildomain'], data.get('message', ''))
-            if emailauth:
-                return self.login(emailauth=emailauth, emailsteamid=data['emailsteamid'])
-            else:
-                print('No email auth code given')
-                #FIXME: Raise proper exception
-                return False
+            if not emailauth:
+                raise NoEmailCodeError('E-mail code not provided.'
+            return self.login(emailauth=emailauth, emailsteamid=data['emailsteamid'])
 
         elif data.get('requires_twofactor', False):
             twofactorcode = self._handle_twofactor(data.get('message', ''))
-            if twofactorcode:
-                return self.login(twofactorcode=twofactorcode)
-            else:
-                #FIXME: Raise proper exception
-                return False
+            if not twofactorcode:
+                raise NoTwoFactorCodeError('Two factor code not provided.')
+            return self.login(twofactorcode=twofactorcode)
 
         else:
-            print('Error, could not login:', data)
-            #FIXME: Raise proper exception
-            return False
+            raise LoginFailedError('Unable to login', data)
 
 class SteamWebBrowserCfg(SteamWebBrowser):
     ''' SteamWebBrowser with built-in config file support

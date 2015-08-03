@@ -273,7 +273,7 @@ class SteamWebBrowser(object):
         elif data.get('emailauth_needed', False):
             emailauth = self._handle_emailauth(data['emaildomain'], data.get('message', ''))
             if not emailauth:
-                raise NoEmailCodeError('E-mail code not provided.'
+                raise NoEmailCodeError('E-mail code not provided.')
             return self.login(emailauth=emailauth, emailsteamid=data['emailsteamid'])
 
         elif data.get('requires_twofactor', False):

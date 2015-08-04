@@ -79,7 +79,9 @@ class SteamWebBrowser(object):
     def appdata_path(self):
         if not getattr(self, '_appdata_path', False):
             # Determine and create path if not exist
-            if 'APPDATA' in os.environ:
+            if 'STEAMWEBROWSER_HOME' in os.environ:
+                confighome = os.environ['STEAMWEBROWSER_HOME']
+            elif 'APPDATA' in os.environ:
                 confighome = os.environ['APPDATA']
             elif 'XDG_CONFIG_HOME' in os.environ:
                 confighome = os.environ['XDG_CONFIG_HOME']

@@ -2,8 +2,9 @@
 
 from setuptools import setup
 
-with open('requirements.txt', 'r') as infile:
-    requirements = [l.strip() for l in infile.readlines()]
+def parse_requirements(path):
+    with open(path, 'r') as infile:
+        return [l.strip() for l in infile.readlines()]
 
 setup(
     name = 'steamweb',
@@ -20,6 +21,8 @@ setup(
         'Operating System :: OS Independent',
         'Programming Language :: Python',
     ],
-    install_requires = requirements,
+    install_requires = parse_requirements('requirements.txt'),
+    tests_require = parse_requirements('requirements-test.txt'),
+    test_suite = 'test',
     scripts = ['demo.py'],
 )

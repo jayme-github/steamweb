@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/jayme-github/steamweb.svg?branch=master)](https://travis-ci.org/jayme-github/steamweb)
+
 # steamweb
 Python lib to access/use steam web pages (stuff not exposed via [the API](https://developer.valvesoftware.com/wiki/Steam_Web_API), you may use [smiley/steamapi](https://github.com/smiley/steamapi) for that)
 
@@ -34,4 +36,4 @@ r = swb.get('https://store.steampowered.com/account/')
 # r is a requests.Response object
 ```
 
-The subclass `SteamWebBrowserTk` provides inherits from `SteamWebBrowserCfg` (so it has configfile support too) and provides a simple Tkinter UI for presenting captcha images to the user.
+The subclass `SteamWebBrowserTk` inherits from `SteamWebBrowserCfg` (so it has configfile support too) and provides a simple Tkinter UI for presenting captcha images to the user.

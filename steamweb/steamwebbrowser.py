@@ -10,10 +10,14 @@ from sys import version_info
 if version_info.major >= 3: # Python 3
     from http.cookiejar import LWPCookieJar
     import configparser
+    from weakref import finalize
 else: # Python 2
     from cookielib import LWPCookieJar
     import ConfigParser as configparser
     from builtins import input, int
+    def finalize(obj, func, *args, **kwargs):
+        ''' Stub method as there is no weakref.finalize in Python 2 '''
+        pass
 
 DEFAULT_USERAGENT = 'Mozilla/5.0 (compatible, MSIE 11, Windows NT 6.3; Trident/7.0; rv:11.0) like Gecko'
 
@@ -71,6 +75,9 @@ class SteamWebBrowser(object):
         else:
             # load cookies
             self.session.cookies.load(ignore_discard=True)
+
+        # Avoid ResourceWarning: unclosed <ssl.SSLSocket ...> with python 3
+        finalize(self, self.session.close)
 
     def _save_cookies(self):
         return self.session.cookies.save(ignore_discard=True)

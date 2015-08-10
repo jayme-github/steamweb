@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/jayme-github/steamweb.svg?branch=master)](https://travis-ci.org/jayme-github/steamweb)
+[![Build Status](https://travis-ci.org/jayme-github/steamweb.svg?branch=master)](https://travis-ci.org/jayme-github/steamweb) [![Coverage Status](https://coveralls.io/repos/jayme-github/steamweb/badge.svg?branch=master&service=github)](https://coveralls.io/github/jayme-github/steamweb?branch=master)
 
 # steamweb
 Python lib to access/use steam web pages (stuff not exposed via [the API](https://developer.valvesoftware.com/wiki/Steam_Web_API), you may use [smiley/steamapi](https://github.com/smiley/steamapi) for that)

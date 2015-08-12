@@ -179,9 +179,9 @@ class SteamWebBrowser(object):
         return b64encode(self.rsa_cipher.encrypt(self._password))
 
     def logged_in(self):
-        r = self.get('https://store.steampowered.com/account/')
-        # Will be redirected if not logged in
-        return r.url == 'https://store.steampowered.com/account/'
+        r = self.session.head('https://store.steampowered.com/login/')
+        # Request will be redirected if we are logged in already
+        return r.status_code == 302
 
     @staticmethod
     def _handle_captcha(captcha_data, message=''):

@@ -4,11 +4,29 @@ import unittest
 import tempfile
 import httpretty
 import json
+import datetime
+import random
+import string
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_v1_5
 from base64 import b64decode
 
-from steamweb.steamwebbrowser import *
+from steamweb.steamwebbrowser import SteamWebBrowser, SteamWebError
+
+def random_ascii_string(lengh):
+    ''' Return a random string
+    May contain ASCII upper and lowercase as well as digits
+    '''
+    return ''.join(random.choice(
+        string.ascii_letters + string.digits
+        ) for i in range(lengh))
+
+def random_number(lengh):
+    ''' Return a random numbe rwith fixed length of lengh '''
+    range_start = 10**(lengh-1)
+    range_end = (10**lengh)-1
+    return random.randint(range_start, range_end)
+
 
 class TestSteamWebBrowser(unittest.TestCase):
     def setUp(self):
@@ -26,15 +44,17 @@ class TestSteamWebBrowser(unittest.TestCase):
 
     @httpretty.activate
     def test_not_logged_in(self):
-        httpretty.register_uri(httpretty.GET, 'https://store.steampowered.com/account/',
-                                status=302,
-                                adding_headers={
-                                    'Location': 'https://store.steampowered.com/login/?redir=account%2F&redir_ssl=1'
-                                })
-        httpretty.register_uri(httpretty.GET, 'https://store.steampowered.com/login/',
+        httpretty.register_uri(httpretty.HEAD, 'https://store.steampowered.com/login/',
                                 status=200,
-                                body='OK',
-                                )
+                                adding_headers={
+                                    'Set-Cookie': 'steamCountry=DE%%7C%s; path=/' % (
+                                        random_ascii_string(32),
+                                    ),
+                                    'Set-Cookie': 'browserid=%d; expires=%s; path=/' % (
+                                        random_number(18),
+                                        (datetime.datetime.now() + datetime.timedelta(days=365)).strftime('%a, %d-%b-%Y %H:%M:%S GMT'),
+                                    ),
+                                })
 
         swb = SteamWebBrowser('user', 'password')
         self.assertFalse(swb.logged_in())
@@ -66,6 +86,3 @@ class TestSteamWebBrowser(unittest.TestCase):
         swb = SteamWebBrowser('user', 'password')
         ciphertext = b64decode(swb._get_encrypted_password())
         self.assertEqual(cipher_full.decrypt(ciphertext, None), swb._password)
-
-if __name__ == '__main__':
-    unittest.main()

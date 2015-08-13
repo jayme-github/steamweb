@@ -60,8 +60,7 @@ class SteamWebBrowser(object):
     def __init__(self, username=None, password=None):
         self._username = self._remove_nonascii(username)
         self._password = self._remove_nonascii(password)
-        
-        
+
         self.session = requests.Session()
         self.session.mount("http://", requests.adapters.HTTPAdapter(max_retries=2))
         self.session.mount("https://", requests.adapters.HTTPAdapter(max_retries=2))
@@ -265,7 +264,7 @@ class SteamWebBrowser(object):
             if data.get('message') == 'Incorrect login.':
                 raise IncorrectLoginError(data.get('message'))
 
-        if data['success'] == True:
+        if data['success'] == True and data['login_complete'] == True:
             # Transfer to get the cookies for the store page too
             data['transfer_parameters']['remember_login'] = True
             req = self.post(data['transfer_url'], data['transfer_parameters'])

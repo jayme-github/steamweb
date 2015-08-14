@@ -7,9 +7,13 @@ import json
 import datetime
 import random
 import string
+import mock
+from sys import version_info
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_v1_5
 from base64 import b64decode
+from png import Writer
+from io import BytesIO
 
 from steamweb.steamwebbrowser import SteamWebBrowser, SteamWebError
 
@@ -27,6 +31,108 @@ def random_number(lengh):
     range_end = (10**lengh)-1
     return random.randint(range_start, range_end)
 
+class SteamWebBrowserMocked(SteamWebBrowser):
+    ''' Mocked SteamWebBrowser
+    '''
+    def __init__(self, user, password):
+        # Generate an RSA key
+        self.rsa_full = RSA.generate(2048)
+        self.cipher_full = PKCS1_v1_5.new(self.rsa_full)
+        self._content_type_json = 'application/json; charset=utf-8'
+        self._login_stage = ['email', 'twocfactor', 'captcha']
+        self._steamid = str(random_number(17))
+
+        # Register URIs
+        httpretty.register_uri(httpretty.POST, 'https://steamcommunity.com/login/getrsakey/',
+                                body=json.dumps({
+                                        'success': True,
+                                        'publickey_mod': format(self.rsa_full.n, 'x').upper(),
+                                        'publickey_exp': format(self.rsa_full.e, 'x').upper(),
+                                        'timestamp': '64861350000', # TODO don't know how this is constructed
+                                }),
+                                content_type=self._content_type_json)
+
+        httpretty.register_uri(httpretty.POST, 'https://steamcommunity.com/login/dologin/',
+                                body=self.generate_dologin_response)
+
+        httpretty.register_uri(httpretty.GET, 'https://steamcommunity.com/public/captcha.php',
+                                body=self.generate_captcha_response)
+
+        httpretty.register_uri(httpretty.POST, 'https://steamcommunity.com/login/transfer',
+                                body='Success',
+                                status=200)
+
+        super(SteamWebBrowserMocked, self).__init__(user, password)
+
+    def __enter__(self):
+        httpretty.enable()
+        return self
+
+    def __exit(self, exc_type, exc_val, exc_tb):
+        httpretty.disable()
+
+    def generate_dologin_response(self, request, uri, headers):
+        ''' Generate dologin responses
+        '''
+        if self._login_stage:
+            stage = self._login_stage.pop(0)
+            if stage == 'email':
+                data = {
+                    'success': False,
+                    'requires_twofactor': False,
+                    'message': '',
+                    'emailauth_needed': True,
+                    'emaildomain': 'whoooohooo.com',
+                    'emailsteamid': self._steamid,
+                }
+            elif stage == 'twocfactor':
+                # FIXME: Don't know what is actually returned if twofactor is required
+                data = {
+                    'success': False,
+                    'requires_twofactor': True,
+                    'message': '',
+                    'emailauth_needed': False,
+                }
+            elif stage == 'captcha':
+                # FIXME: Don't know what is actually returned if captcha is required
+                data = {
+                    'success': False,
+                    'requires_twofactor': False,
+                    'message': '',
+                    'emailauth_needed': False,
+                    'captcha_needed': True,
+                    'captcha_gid': str(random_number(18)),
+                }
+        else:
+            # Processed all stages, login completed now
+            data = {
+                'success': True,
+                'requires_twofactor': False,
+                'login_complete': True,
+                'transfer_url': 'https://steamcommunity.com/login/transfer',
+                'transfer_parameters': {
+                    'steamid': self._steamid,
+                    'remember_login': True,
+                    'token': random_ascii_string(40).upper(),
+                    'auth': random_ascii_string(32).lower(),
+                    'webcookie': random_ascii_string(40).upper(),
+                    'token_secure': random_ascii_string(40).upper(),
+                },
+            }
+
+        headers['Content-Type'] = self._content_type_json
+        return (200, headers, json.dumps(data))
+
+    def generate_captcha_response(self, request, uri, headers):
+        ''' Generate a PNG image and return it as captcha mock
+        '''
+        f = BytesIO()
+        w = Writer(206, 40)
+        pngdata = [[random.randint(0,255) for i in range(206*w.planes)] for i in range(40)]
+        w.write(f, pngdata)
+        headers['Content-Type'] = 'image/png'
+        return (200, headers, f.getvalue())
+
 
 class TestSteamWebBrowser(unittest.TestCase):
     def setUp(self):
@@ -40,7 +146,8 @@ class TestSteamWebBrowser(unittest.TestCase):
     def test_appdata_path(self):
         ''' Test if appdata path is created '''
         swb = SteamWebBrowser('user', 'password')
-        self.assertTrue(os.path.isdir(swb.appdata_path) and os.access(swb.appdata_path, os.W_OK))
+        self.assertTrue(os.path.isdir(swb.appdata_path))
+        self.assertTrue(os.access(swb.appdata_path, os.W_OK))
 
     @httpretty.activate
     def test_not_logged_in(self):
@@ -61,28 +168,34 @@ class TestSteamWebBrowser(unittest.TestCase):
 
     @httpretty.activate
     def test_rsa_fail(self):
-        body='{"success": false}'
         httpretty.register_uri(httpretty.POST, 'https://steamcommunity.com/login/getrsakey/',
-                                body=body,
-                                content_type='text/json')
+                                body='{"success": false}',
+                                content_type='application/json; charset=utf-8')
         swb = SteamWebBrowser('user', 'password')
         with self.assertRaises(SteamWebError):
             swb._get_rsa_key()
 
     @httpretty.activate
-    def test_encryption(self):
-        rsa_full = RSA.generate(2048)
-        cipher_full = PKCS1_v1_5.new(rsa_full)
+    def test_login(self):
+        swb = SteamWebBrowserMocked('user', 'password')
 
-        body = {
-            'success': True,
-            'publickey_mod': format(rsa_full.n, 'x').upper(),
-            'publickey_exp': format(rsa_full.e, 'x').upper(),
-            'timestamp': '64861350000', # TODO don't know how this is constructed
-        }
-        httpretty.register_uri(httpretty.POST, 'https://steamcommunity.com/login/getrsakey/',
-                                body=json.dumps(body),
-                                content_type='text/json')
-        swb = SteamWebBrowser('user', 'password')
+        # Text if encryption works
         ciphertext = b64decode(swb._get_encrypted_password())
-        self.assertEqual(cipher_full.decrypt(ciphertext, None), swb._password)
+        self.assertEqual(swb.cipher_full.decrypt(ciphertext, None), swb._password)
+
+        class StringStartingWith(str):
+            def __eq__(self, other):
+                return other.startswith(self)
+
+        if version_info.major >= 3:
+            input_func = 'builtins.input'
+        else:
+            input_func = 'steamweb.steamwebbrowser.input'
+        with mock.patch(input_func, return_value='s3cretCode') as mock_input:
+            swb.login()
+
+            mock_input.assert_has_calls([
+                mock.call(StringStartingWith('Please enter the code sent to your mail addres at ')),
+                mock.call('Please enter the code sent to your phone: '),
+                mock.call(StringStartingWith('Please take a look at the captcha image "')),
+            ])

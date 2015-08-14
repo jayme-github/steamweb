@@ -198,8 +198,7 @@ class SteamWebBrowser(object):
         tmpf = NamedTemporaryFile(suffix='.png')
         tmpf.write(captcha_data)
         tmpf.flush()
-        print('Please take a look at the captcha image "%s" and provide the code:' % tmpf.name)
-        captcha_text = input('Enter code: ')
+        captcha_text = input('Please take a look at the captcha image "%s" and provide the code:' % tmpf.name)
         tmpf.close()
         return captcha_text
 

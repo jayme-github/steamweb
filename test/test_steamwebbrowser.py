@@ -15,7 +15,7 @@ from base64 import b64decode
 from png import Writer
 from io import BytesIO
 
-from steamweb.steamwebbrowser import SteamWebBrowser, SteamWebError
+from steamweb.steamwebbrowser import SteamWebBrowser, SteamWebError, IncorrectLoginError
 
 def random_ascii_string(lengh):
     ''' Return a random string
@@ -203,3 +203,11 @@ class TestSteamWebBrowser(unittest.TestCase):
                 mock.call('Please enter the code sent to your phone: '),
                 mock.call(StringStartingWith('Please take a look at the captcha image "')),
             ])
+    
+    @httpretty.activate
+    def test_login_failed(self):
+        swb = SteamWebBrowserMocked('user', 'password')
+        httpretty.register_uri(httpretty.POST, 'https://steamcommunity.com/login/dologin/',
+                                body='{"success": false,"message":"Incorrect login."}')
+        with self.assertRaises(IncorrectLoginError):
+            swb.login()

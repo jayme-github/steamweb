@@ -125,7 +125,9 @@ class SteamWebBrowserMocked(SteamWebBrowser):
                 },
             }
 
+        next_year = (datetime.datetime.now() + datetime.timedelta(days=365))
         headers['Content-Type'] = self._content_type_json
+        headers['Set-Cookie'] = 'browserid=%d; expires=%s; path=/' % (random_number(18), next_year.strftime('%a, %d-%b-%Y %H:%M:%S GMT'))
         return (200, headers, json.dumps(data))
 
     def generate_captcha_response(self, request, uri, headers):
@@ -150,9 +152,18 @@ class TestSteamWebBrowser(unittest.TestCase):
 
     def test_appdata_path(self):
         ''' Test if appdata path is created '''
-        swb = SteamWebBrowser('user', 'password')
-        self.assertTrue(os.path.isdir(swb.appdata_path))
-        self.assertTrue(os.access(swb.appdata_path, os.W_OK))
+        appdata_paths = ('STEAMWEBROWSER_HOME', 'APPDATA', 'XDG_CONFIG_HOME', 'HOME')
+        for key in appdata_paths:
+                temp_dir = tempfile.mkdtemp()
+                with mock.patch.dict('os.environ', {key: temp_dir}):
+                    # Remove all other keys from environ
+                    for a in appdata_paths:
+                        if a != key and a in os.environ:
+                            del os.environ[a]
+
+                    swb = SteamWebBrowser('user', 'password')
+                    self.assertTrue(os.path.isdir(swb.appdata_path))
+                    self.assertTrue(os.access(swb.appdata_path, os.W_OK))
 
     @httpretty.activate
     def test_not_logged_in(self):
@@ -165,16 +176,7 @@ class TestSteamWebBrowser(unittest.TestCase):
     def test_rsa_fail(self):
         httpretty.register_uri(httpretty.POST, 'https://steamcommunity.com/login/getrsakey/',
                                 body='{"success": false}',
-                                content_type='application/json; charset=utf-8',
-                                adding_headers={
-                                    'Set-Cookie': 'steamCountry=DE%%7C%s; path=/' % (
-                                        random_ascii_string(32),
-                                    ),
-                                    'Set-Cookie': 'browserid=%d; expires=%s; path=/' % (
-                                        random_number(18),
-                                        (datetime.datetime.now() + datetime.timedelta(days=365)).strftime('%a, %d-%b-%Y %H:%M:%S GMT'),
-                                    ),
-                                })
+                                content_type='application/json; charset=utf-8')
         swb = SteamWebBrowser('user', 'password')
         with self.assertRaises(SteamWebError):
             swb._get_rsa_key()
@@ -196,6 +198,7 @@ class TestSteamWebBrowser(unittest.TestCase):
         else:
             input_func = 'steamweb.steamwebbrowser.input'
         with mock.patch(input_func, return_value='s3cretCode') as mock_input:
+            # Test login
             swb.login()
 
             mock_input.assert_has_calls([
@@ -203,6 +206,9 @@ class TestSteamWebBrowser(unittest.TestCase):
                 mock.call('Please enter the code sent to your phone: '),
                 mock.call(StringStartingWith('Please take a look at the captcha image "')),
             ])
+
+            # Test if cookies where stored
+            self.assertTrue(swb._has_cookie('browserid'))
     
     @httpretty.activate
     def test_login_failed(self):

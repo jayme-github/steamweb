@@ -56,7 +56,12 @@ class SteamWebBrowserMocked(SteamWebBrowser):
                                 body=self.generate_dologin_response)
 
         httpretty.register_uri(httpretty.GET, 'https://steamcommunity.com/public/captcha.php',
-                                body=self.generate_captcha_response)
+                                body=self.generate_captcha_response,
+                                adding_headers={
+                                    'Set-Cookie': 'sessionid=%s; path=/' % (
+                                        random_ascii_string(24),
+                                    ),
+                                })
 
         httpretty.register_uri(httpretty.POST, 'https://steamcommunity.com/login/transfer',
                                 body='Success',
@@ -152,7 +157,15 @@ class TestSteamWebBrowser(unittest.TestCase):
     @httpretty.activate
     def test_not_logged_in(self):
         httpretty.register_uri(httpretty.HEAD, 'https://store.steampowered.com/login/',
-                                status=200,
+                                status=200)
+        swb = SteamWebBrowser('user', 'password')
+        self.assertFalse(swb.logged_in())
+
+    @httpretty.activate
+    def test_rsa_fail(self):
+        httpretty.register_uri(httpretty.POST, 'https://steamcommunity.com/login/getrsakey/',
+                                body='{"success": false}',
+                                content_type='application/json; charset=utf-8',
                                 adding_headers={
                                     'Set-Cookie': 'steamCountry=DE%%7C%s; path=/' % (
                                         random_ascii_string(32),
@@ -162,15 +175,6 @@ class TestSteamWebBrowser(unittest.TestCase):
                                         (datetime.datetime.now() + datetime.timedelta(days=365)).strftime('%a, %d-%b-%Y %H:%M:%S GMT'),
                                     ),
                                 })
-
-        swb = SteamWebBrowser('user', 'password')
-        self.assertFalse(swb.logged_in())
-
-    @httpretty.activate
-    def test_rsa_fail(self):
-        httpretty.register_uri(httpretty.POST, 'https://steamcommunity.com/login/getrsakey/',
-                                body='{"success": false}',
-                                content_type='application/json; charset=utf-8')
         swb = SteamWebBrowser('user', 'password')
         with self.assertRaises(SteamWebError):
             swb._get_rsa_key()

@@ -3,6 +3,7 @@ import time
 import re
 import os
 import requests
+import logging
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_v1_5
 from base64 import b64encode
@@ -56,29 +57,42 @@ class SteamWebBrowser(object):
     rsa_timestamp = None
     re_nonascii = re.compile(r'[^\x00-\x7F]')
     re_fs_safe = re.compile(r'[^\w-]')
-    
+
     def __init__(self, username=None, password=None):
         self._username = self._remove_nonascii(username)
         self._password = self._remove_nonascii(password)
+        self.logger.info('Initialized with user: %s', self._username)
 
         self.session = requests.Session()
         self.session.mount("http://", requests.adapters.HTTPAdapter(max_retries=2))
         self.session.mount("https://", requests.adapters.HTTPAdapter(max_retries=2))
         self.set_useragent()
+        # Avoid ResourceWarning: unclosed <ssl.SSLSocket ...> with python 3
+        finalize(self, self.session.close)
 
         cookie_file = os.path.join(self.appdata_path, self._make_fs_safe(username)+'.lwp')
         self.session.cookies = LWPCookieJar(cookie_file)
         if not os.path.exists(cookie_file):
             # initialize new (empty) cookie file
+            self.logger.info('Creating new cookie file: "%s"' % cookie_file)
             self._save_cookies()
         else:
             # load cookies
+            self.logger.info('Loading cookies from file: "%s"' % cookie_file)
             self.session.cookies.load(ignore_discard=True)
+            if self.logger.isEnabledFor(logging.DEBUG):
+                self._log_cookies()
+                self.logger.debug('Are we logged in: %s' % self.logged_in()) 
 
-        # Avoid ResourceWarning: unclosed <ssl.SSLSocket ...> with python 3
-        finalize(self, self.session.close)
+    @property
+    def logger(self):
+        if not getattr(self, '_logger', False):
+            name = '.'.join((__name__, self.__class__.__name__))
+            self._logger = logging.getLogger(name)
+        return self._logger
 
     def _save_cookies(self):
+        self.logger.debug('Saving cookies to disk')
         return self.session.cookies.save(ignore_discard=True)
 
     @property
@@ -97,12 +111,15 @@ class SteamWebBrowser(object):
             self._appdata_path = os.path.join(confighome, self.name)
             for p in [p for p in (confighome, self._appdata_path) if not os.path.isdir(p)]:
                 os.mkdir(p, 0o700)
+        self.logger.info('Appdata path: "%s"', self._appdata_path)
         return self._appdata_path
 
     def set_useragent(self, useragent=DEFAULT_USERAGENT):
         self.session.headers.update({'User-Agent': useragent})
+        self.logger.debug('User-Agent set to: "%s"' % useragent)
 
     def post(self, url, data=None, **kwargs):
+        self.logger.debug('POST "%s", data: "%s", kwargs: "%s"' %(url, data, kwargs))
         h = self._hash_cookies()
         r = self.session.post(url, data, **kwargs)
         # Will raise HTTPError on 4XX client error or 5XX server error response
@@ -113,6 +130,7 @@ class SteamWebBrowser(object):
         return r
 
     def get(self, url, **kwargs):
+        self.logger.debug('GET "%s", kwargs: "%s"' %(url, kwargs))
         h = self._hash_cookies()
         r = self.session.get(url, **kwargs)
         # Will raise HTTPError on 4XX client error or 5XX server error response
@@ -121,7 +139,13 @@ class SteamWebBrowser(object):
             # Cookies have changed
             self._save_cookies()
         return r
-    
+
+    def get_account_page(self):
+        return self.get('https://store.steampowered.com/account/')
+
+    def get_profile_page(self):
+        return self.get('https://steamcommunity.com/my/')
+
     def _remove_nonascii(self, instr):
         ''' Steam strips non-ascii characters before sending across the web.
         '''
@@ -140,7 +164,7 @@ class SteamWebBrowser(object):
 
     def _log_cookies(self, prefix=''):
         for c in self.session.cookies:
-            print(prefix, repr(c))
+            self.logger.debug('%s: %s'%(prefix, repr(c)))
 
     def _has_cookie(self, name, domain='steamcommunity.com'):
         if len([c for c in self.session.cookies if c.name==name and c.domain==domain]) > 0:
@@ -179,6 +203,7 @@ class SteamWebBrowser(object):
 
     def logged_in(self):
         r = self.session.head('https://store.steampowered.com/login/')
+        self.logger.debug(r.headers)
         # Request will be redirected if we are logged in already
         return r.status_code == 302
 
@@ -237,6 +262,9 @@ class SteamWebBrowser(object):
         return twofactorcode
 
     def login(self, captchagid='-1', captcha_text='', emailauth='', emailsteamid='', loginfriendlyname='', twofactorcode=''):
+        self.logger.info('login calles with: captchagid="%s", captcha_text="%s", emailauth="%s", emailsteamid="%s", loginfriendlyname="%s", twofactorcode="%s"' % (
+            captchagid, captcha_text, emailauth, emailsteamid, loginfriendlyname, twofactorcode,
+        ))
         # Force a new RSA key request for every call
         self._get_rsa_key()
 
@@ -258,14 +286,16 @@ class SteamWebBrowser(object):
 
         req = self.post(url, data=values)
         data = req.json()
+        self.logger.debug('login response: "%s"' % data)
         if data.get('message'):
-            # TODO: log message
+            self.logger.warning(data.get('message'))
             if data.get('message') == 'Incorrect login.':
                 raise IncorrectLoginError(data.get('message'))
 
         if data['success'] == True and data['login_complete'] == True:
             # Transfer to get the cookies for the store page too
             data['transfer_parameters']['remember_login'] = True
+            self.logger.info('Login completed, sending transfer data to: "%s"' % data['transfer_url'])
             req = self.post(data['transfer_url'], data['transfer_parameters'])
             # Logged in
 
@@ -273,18 +303,21 @@ class SteamWebBrowser(object):
             imgdata = self.get('https://steamcommunity.com/public/captcha.php',
                                         params={'gid': data['captcha_gid']})
             captcha_text = self._handle_captcha(imgdata.content, data.get('message', ''))
+            self.logger.info('Got captcha text "%s"' % captcha_text)
             if not captcha_text:
                 raise NoCaptchaCodeError('Captcha code not provided.')
             return self.login(captchagid=data['captcha_gid'], captcha_text=captcha_text)
 
         elif data.get('emailauth_needed') == True:
             emailauth = self._handle_emailauth(data['emaildomain'], data.get('message', ''))
+            self.logger.info('Got e-mail code: "%s"' % emailauth)
             if not emailauth:
                 raise NoEmailCodeError('E-mail code not provided.')
             return self.login(emailauth=emailauth, emailsteamid=data['emailsteamid'])
 
         elif data.get('requires_twofactor') == True:
             twofactorcode = self._handle_twofactor(data.get('message', ''))
+            self.logger.info('Got twofactor code: "%s"' % twofactorcode)
             if not twofactorcode:
                 raise NoTwoFactorCodeError('Two factor code not provided.')
             return self.login(twofactorcode=twofactorcode)

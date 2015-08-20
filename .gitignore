@@ -62,5 +62,6 @@ target/
 
 TODO
 python_interpreter_defaults
+.pythonrc*
 .venv
 *.swp

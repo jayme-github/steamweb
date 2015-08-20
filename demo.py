@@ -11,6 +11,6 @@ else:
 swb = SteamWebBrowserCfg()
 if not swb.logged_in():
     swb.login()
-r = swb.get('https://store.steampowered.com/account/')
+r = swb.get_account_page()
 m = re.search(r'<a href="http://store\.steampowered\.com/account/history/">(\S+)</a>', r.text)
 print('Yout wallet balance:', HTMLParser().unescape(m.groups()[0]))

@@ -9,11 +9,11 @@ from Crypto.Cipher import PKCS1_v1_5
 from base64 import b64encode
 from sys import version_info
 if version_info.major >= 3: # Python 3
-    from http.cookiejar import LWPCookieJar
+    from http.cookiejar import LWPCookieJar, Cookie
     import configparser
     from weakref import finalize
 else: # Python 2
-    from cookielib import LWPCookieJar
+    from cookielib import LWPCookieJar, Cookie
     import ConfigParser as configparser
     from builtins import input, int
     def finalize(obj, func, *args, **kwargs):
@@ -57,6 +57,20 @@ class SteamWebBrowser(object):
     rsa_timestamp = None
     re_nonascii = re.compile(r'[^\x00-\x7F]')
     re_fs_safe = re.compile(r'[^\w-]')
+    mobile_cookies = (
+        Cookie(version=0, name='forceMobile', value='1',
+            port=None, port_specified=False,
+            domain='steamcommunity.com', domain_specified=True, domain_initial_dot=False,
+            path='/mobilelogin', path_specified=True,
+            secure=False, expires=None, discard=False, comment=None, comment_url=None, rest={},
+        ),
+        Cookie(version=0, name='mobileClient', value='Android',
+            port=None, port_specified=False,
+            domain='steamcommunity.com', domain_specified=True, domain_initial_dot=False,
+            path='/mobilelogin', path_specified=True,
+            secure=False, expires=None, discard=False, comment=None, comment_url=None, rest={},
+        ),
+    )
 
     def __init__(self, username=None, password=None):
         self._username = self._remove_nonascii(username)
@@ -73,8 +87,9 @@ class SteamWebBrowser(object):
         cookie_file = os.path.join(self.appdata_path, self._make_fs_safe(username)+'.lwp')
         self.session.cookies = LWPCookieJar(cookie_file)
         if not os.path.exists(cookie_file):
-            # initialize new (empty) cookie file
+            # initialize new cookie file
             self.logger.info('Creating new cookie file: "%s"' % cookie_file)
+            self.set_mobile_cookies()
             self._save_cookies()
         else:
             # load cookies
@@ -117,6 +132,19 @@ class SteamWebBrowser(object):
     def set_useragent(self, useragent=DEFAULT_USERAGENT):
         self.session.headers.update({'User-Agent': useragent})
         self.logger.debug('User-Agent set to: "%s"' % useragent)
+
+    def clear_mobile_cookies(self):
+        for mc in self.mobile_cookies:
+            for c in self.session.cookies:
+                if c.name == mc.name and \
+                        c.path == mc.path and \
+                        c.domain == mc.domain:
+                    # Remove cookie
+                    self.session.cookies.clear(c.domain, c.path, c.name)
+
+    def set_mobile_cookies(self):
+        for mc in self.mobile_cookies:
+            self.session.cookies.set_cookie(mc)
 
     def post(self, url, data=None, **kwargs):
         self.logger.debug('POST "%s", data: "%s", kwargs: "%s"' %(url, data, kwargs))
@@ -179,7 +207,7 @@ class SteamWebBrowser(object):
 
     def _get_rsa_key(self):
         ''' get steam RSA key, build and return cipher '''
-        url = 'https://steamcommunity.com/login/getrsakey/'
+        url = 'https://steamcommunity.com/mobilelogin/getrsakey/'
         values = {
                 'username': self._username,
                 'donotcache' : self._get_donotcachetime(),
@@ -269,7 +297,7 @@ class SteamWebBrowser(object):
         self._get_rsa_key()
 
         # Login
-        url = 'https://steamcommunity.com/login/dologin/'
+        url = 'https://steamcommunity.com/mobilelogin/dologin/'
         values = {
                 'username': self._username,
                 'password': self._get_encrypted_password(),
@@ -282,6 +310,7 @@ class SteamWebBrowser(object):
                 'remember_login': True,
                 'donotcache': self._get_donotcachetime(),
                 'twofactorcode' : twofactorcode,
+                'oauth_client_id': 'DE45CD61',
         }
 
         req = self.post(url, data=values)
@@ -292,11 +321,10 @@ class SteamWebBrowser(object):
             if data.get('message') == 'Incorrect login.':
                 raise IncorrectLoginError(data.get('message'))
 
-        if data['success'] == True and data['login_complete'] == True:
-            # Transfer to get the cookies for the store page too
-            data['transfer_parameters']['remember_login'] = True
-            self.logger.info('Login completed, sending transfer data to: "%s"' % data['transfer_url'])
-            req = self.post(data['transfer_url'], data['transfer_parameters'])
+        if data['success'] == True and data['oauth']:
+            # Save oauth data
+            self.oauth = data['oauth']
+            self.logger.info('Login completed')
             # Logged in
 
         elif data.get('captcha_needed') == True and data.get('captcha_gid', '-1') != '-1':

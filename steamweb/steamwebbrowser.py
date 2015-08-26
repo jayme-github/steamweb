@@ -8,6 +8,7 @@ from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_v1_5
 from base64 import b64encode
 from sys import version_info
+import json
 if version_info.major >= 3: # Python 3
     from http.cookiejar import LWPCookieJar, Cookie
     import configparser
@@ -57,6 +58,8 @@ class SteamWebBrowser(object):
     rsa_timestamp = None
     re_nonascii = re.compile(r'[^\x00-\x7F]')
     re_fs_safe = re.compile(r'[^\w-]')
+    oauth_access_token = ''
+    steamid = ''
     mobile_cookies = (
         Cookie(version=0, name='forceMobile', value='1',
             port=None, port_specified=False,
@@ -314,18 +317,30 @@ class SteamWebBrowser(object):
         }
 
         req = self.post(url, data=values)
+        self.logger.debug('login response: "%s"' % req.text)
         data = req.json()
-        self.logger.debug('login response: "%s"' % data)
+        self.logger.debug('JSON login response: "%s"' % data)
         if data.get('message'):
             self.logger.warning(data.get('message'))
             if data.get('message') == 'Incorrect login.':
                 raise IncorrectLoginError(data.get('message'))
 
         if data['success'] == True and data['oauth']:
-            # Save oauth data
-            self.oauth = data['oauth']
-            self.logger.info('Login completed')
+            '''
+            Save OAuth data which is a string containing json:
+
+            steamid:     [STR] The user's SteamID
+            oauth_token: [STR] The OAuth token used for repeat authentication, and all secure requests.
+            webcookie:   [STR] Cookie used to maintain secure access to steam's normal services (store, profile, settings, etc).
+                               This should already be in the cookiejar (steamLoginSecure).
+            '''
+            oauth_json = json.loads(data['oauth'])
+            self.logger.debug('JSON Oauth: "%s"' % oauth_json)
+            self.oauth_access_token = oauth_json['oauth_token']
+            self.steamid = oauth_json['steamid']
+            self.logger.info('Login completed, steamid: "%s"' % self.steamid)
             # Logged in
+            return self.steamid
 
         elif data.get('captcha_needed') == True and data.get('captcha_gid', '-1') != '-1':
             imgdata = self.get('https://steamcommunity.com/public/captcha.php',

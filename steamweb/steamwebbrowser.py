@@ -58,8 +58,6 @@ class SteamWebBrowser(object):
     rsa_timestamp = None
     re_nonascii = re.compile(r'[^\x00-\x7F]')
     re_fs_safe = re.compile(r'[^\w-]')
-    oauth_access_token = ''
-    steamid = ''
     mobile_cookies = (
         Cookie(version=0, name='forceMobile', value='1',
             port=None, port_specified=False,
@@ -101,6 +99,20 @@ class SteamWebBrowser(object):
             if self.logger.isEnabledFor(logging.DEBUG):
                 self._log_cookies()
                 self.logger.debug('Are we logged in: %s' % self.logged_in()) 
+
+    @property
+    def oauth_access_token(self):
+        c = self._get_cookie('oauth_access_token', 'steamwebbrowser.tld')
+        if c:
+            return c.value
+        raise KeyError('oauth_access_token is not set')
+
+    @property
+    def steamid(self):
+        c = self._get_cookie('steamid', 'steamwebbrowser.tld')
+        if c:
+            return c.value
+        raise KeyError('steamid is not set')
 
     @property
     def logger(self):
@@ -197,6 +209,15 @@ class SteamWebBrowser(object):
         for c in self.session.cookies:
             self.logger.debug('%s: %s'%(prefix, repr(c)))
 
+    def _get_cookie(self, name, domain):
+        ''' Return the cookie "name" for "domain" if found
+            If there are mote than one, only the first is returned
+        '''
+        for c in self.session.cookies:
+            if c.name==name and c.domain==domain:
+                return c
+        return None
+
     def _has_cookie(self, name, domain='steamcommunity.com'):
         if len([c for c in self.session.cookies if c.name==name and c.domain==domain]) > 0:
             return True
@@ -233,6 +254,11 @@ class SteamWebBrowser(object):
         return b64encode(self.rsa_cipher.encrypt(self._password))
 
     def logged_in(self):
+        try:
+            _ = self.oauth_access_token
+        except KeyError:
+            return False
+
         r = self.session.head('https://store.steampowered.com/login/')
         self.logger.debug(r.headers)
         # Request will be redirected if we are logged in already
@@ -292,6 +318,32 @@ class SteamWebBrowser(object):
         twofactorcode.upper()
         return twofactorcode
 
+    def _store_oauth_access_token(self, oauth_access_token):
+        ''' Called when login is complete to store the oauth access token
+            This implementation stores the oauth_access_token in a seperate cookie for domain steamwebbrowser.tld
+        '''
+        c = Cookie(version=0, name='oauth_access_token', value=oauth_access_token,
+            port=None, port_specified=False,
+            domain='steamwebbrowser.tld', domain_specified=True, domain_initial_dot=False,
+            path='/', path_specified=True,
+            secure=False, expires=None, discard=False, comment=None, comment_url=None, rest={},
+        )
+        self.session.set_cookie(c)
+        self._save_cookies()
+
+    def _store_steamid(self, steamid):
+        ''' Called when login is complete to store the steam id
+            This implementation stores the steamid in a seperate cookie for domain steamwebbrowser.tld
+        '''
+        c = Cookie(version=0, name='steamid', value=steamid,
+            port=None, port_specified=False,
+            domain='steamwebbrowser.tld', domain_specified=True, domain_initial_dot=False,
+            path='/', path_specified=True,
+            secure=False, expires=None, discard=False, comment=None, comment_url=None, rest={},
+        )
+        self.session.set_cookie(c)
+        self._save_cookies()
+
     def login(self, captchagid='-1', captcha_text='', emailauth='', emailsteamid='', loginfriendlyname='', twofactorcode=''):
         self.logger.info('login calles with: captchagid="%s", captcha_text="%s", emailauth="%s", emailsteamid="%s", loginfriendlyname="%s", twofactorcode="%s"' % (
             captchagid, captcha_text, emailauth, emailsteamid, loginfriendlyname, twofactorcode,
@@ -336,8 +388,8 @@ class SteamWebBrowser(object):
             '''
             oauth_json = json.loads(data['oauth'])
             self.logger.debug('JSON Oauth: "%s"' % oauth_json)
-            self.oauth_access_token = oauth_json['oauth_token']
-            self.steamid = oauth_json['steamid']
+            self._store_oauth_access_token(oauth_json['oauth_token'])
+            self._store_steamid(oauth_json['steamid'])
             self.logger.info('Login completed, steamid: "%s"' % self.steamid)
             # Logged in
             return self.steamid
@@ -373,10 +425,10 @@ class SteamWebBrowserCfg(SteamWebBrowser):
     '''
     def __init__(self):
         self.cfg = configparser.ConfigParser()
-        cfg_path = os.path.join(self.appdata_path, 'config.cfg')
-        if os.path.isfile(cfg_path):
-            self.cfg.read(cfg_path)
-        self._init_config(cfg_path)
+        self.cfg_path = os.path.join(self.appdata_path, 'config.cfg')
+        if os.path.isfile(self.cfg_path):
+            self.cfg.read(self.cfg_path)
+        self._init_config()
 
         # Init superclass with username and password from config
         super(SteamWebBrowserCfg, self).__init__(
@@ -386,7 +438,7 @@ class SteamWebBrowserCfg(SteamWebBrowser):
         # Overwrite User-Agent with the one in config
         self.set_useragent(self.cfg.get('steamweb', 'useragent'))
 
-    def _init_config(self, cfg_path):
+    def _init_config(self):
         cfg_changed = False
         if not self.cfg.has_section('steamweb'):
             self.cfg.add_section('steamweb')
@@ -407,5 +459,29 @@ class SteamWebBrowserCfg(SteamWebBrowser):
             cfg_changed = True
 
         if cfg_changed:
-            with open(cfg_path, 'wb') as cfg_fd:
-                self.cfg.write(cfg_fd)
+            self._write_config()
+
+    def _write_config(self):
+        with open(self.cfg_path, 'w') as cfg_fd:
+            self.cfg.write(cfg_fd)
+
+    def _store_oauth_access_token(self, oauth_access_token):
+        self.cfg.set('steamweb', 'oauth_access_token', oauth_access_token)
+        self._write_config()
+
+    def _store_steamid(self, steamid):
+        self.cfg.set('steamweb', 'steamid', steamid)
+        self._write_config()
+
+    @property
+    def oauth_access_token(self):
+        if self.cfg.has_option('steamweb', 'oauth_access_token'):
+            return self.cfg.get('steamweb', 'oauth_access_token')
+        raise KeyError('oauth_access_token is not set')
+
+    @property
+    def steamid(self):
+        if self.cfg.has_option('steamweb', 'steamid'):
+            return self.cfg.get('steamweb', 'steamid')
+        raise KeyError('steamid is not set')
+

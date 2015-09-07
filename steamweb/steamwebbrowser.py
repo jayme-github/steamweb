@@ -170,7 +170,15 @@ class SteamWebBrowser(object):
         if h != self._hash_cookies():
             # Cookies have changed
             self._save_cookies()
-        return r
+        if r.history and 'login/home/?goto=' in r.url:
+            # Session expired, login again
+            self.logger.warning('Session expired while POST, trying to login again')
+            if self.login():
+                return self.post(url, data, **kwargs)
+            else:
+                self.logger.error('Login failed during POST')
+        else:
+            return r
 
     def get(self, url, **kwargs):
         self.logger.debug('GET "%s", kwargs: "%s"' %(url, kwargs))
@@ -181,7 +189,15 @@ class SteamWebBrowser(object):
         if h != self._hash_cookies():
             # Cookies have changed
             self._save_cookies()
-        return r
+        if r.history and 'login/home/?goto=' in r.url:
+            # Session expired, login again
+            self.logger.warning('Session expired while GET, trying to login again')
+            if self.login():
+                return self.get(url, **kwargs)
+            else:
+                self.logger.error('Login failed during GET')
+        else:
+            return r
 
     def get_account_page(self):
         return self.get('https://store.steampowered.com/account/')
@@ -257,12 +273,14 @@ class SteamWebBrowser(object):
         try:
             _ = self.oauth_access_token
         except KeyError:
+            self.logger.debug('No access token stored')
             return False
-
-        r = self.session.head('https://store.steampowered.com/login/')
-        self.logger.debug(r.headers)
-        # Request will be redirected if we are logged in already
-        return r.status_code == 302
+        # Use session directly as self.get() will trigger login if not logged in
+        r = self.session.get('https://steamcommunity.com/my/')
+        self.logger.debug('Request headers: %s', r.headers)
+        if not '<a class="global_action_link"' in r.text:
+            return True
+        return False
 
     @staticmethod
     def _handle_captcha(captcha_data, message=''):

@@ -2,8 +2,10 @@ from __future__ import print_function
 import time
 import re
 import os
-import requests
 import logging
+from requests import Session
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util import Retry
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_v1_5
 from base64 import b64encode
@@ -78,9 +80,13 @@ class SteamWebBrowser(object):
         self._password = self._remove_nonascii(password)
         self.logger.info('Initialized with user: %s', self._username)
 
-        self.session = requests.Session()
-        self.session.mount("http://", requests.adapters.HTTPAdapter(max_retries=2))
-        self.session.mount("https://", requests.adapters.HTTPAdapter(max_retries=2))
+        self.session = Session()
+        self.session.mount('http://', HTTPAdapter(
+            max_retries=Retry(total=2, status_forcelist=[500, 502, 503, 504])
+        ))
+        self.session.mount('https://', HTTPAdapter(
+            max_retries=Retry(total=2, status_forcelist=[500, 502, 503, 504])
+        ))
         self.set_useragent()
         # Avoid ResourceWarning: unclosed <ssl.SSLSocket ...> with python 3
         finalize(self, self.session.close)

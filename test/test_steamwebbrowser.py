@@ -43,7 +43,7 @@ class SteamWebBrowserMocked(SteamWebBrowser):
         self._steamid = str(random_number(17))
 
         # Register URIs
-        httpretty.register_uri(httpretty.POST, 'https://steamcommunity.com/login/getrsakey/',
+        httpretty.register_uri(httpretty.POST, 'https://steamcommunity.com/mobilelogin/getrsakey/',
                                 body=json.dumps({
                                         'success': True,
                                         'publickey_mod': format(self.rsa_full.n, 'x').upper(),
@@ -52,7 +52,7 @@ class SteamWebBrowserMocked(SteamWebBrowser):
                                 }),
                                 content_type=self._content_type_json)
 
-        httpretty.register_uri(httpretty.POST, 'https://steamcommunity.com/login/dologin/',
+        httpretty.register_uri(httpretty.POST, 'https://steamcommunity.com/mobilelogin/dologin/',
                                 body=self.generate_dologin_response)
 
         httpretty.register_uri(httpretty.GET, 'https://steamcommunity.com/public/captcha.php',
@@ -114,15 +114,13 @@ class SteamWebBrowserMocked(SteamWebBrowser):
                 'success': True,
                 'requires_twofactor': False,
                 'login_complete': True,
-                'transfer_url': 'https://steamcommunity.com/login/transfer',
-                'transfer_parameters': {
+                'redirect_uri': 'steammobile://mobileloginsucceeded',
+                'oauth': json.dumps({
                     'steamid': self._steamid,
-                    'remember_login': True,
-                    'token': random_ascii_string(40).upper(),
-                    'auth': random_ascii_string(32).lower(),
-                    'webcookie': random_ascii_string(40).upper(),
-                    'token_secure': random_ascii_string(40).upper(),
-                },
+                    'oauth_token': random_ascii_string(32).lower(),
+                    'wgtoken': random_ascii_string(40).upper(),
+                    'wgtoken_secure': random_ascii_string(40).upper(),
+                }),
             }
 
         next_year = (datetime.datetime.now() + datetime.timedelta(days=365))
@@ -174,7 +172,7 @@ class TestSteamWebBrowser(unittest.TestCase):
 
     @httpretty.activate
     def test_rsa_fail(self):
-        httpretty.register_uri(httpretty.POST, 'https://steamcommunity.com/login/getrsakey/',
+        httpretty.register_uri(httpretty.POST, 'https://steamcommunity.com/mobilelogin/getrsakey/',
                                 body='{"success": false}',
                                 content_type='application/json; charset=utf-8')
         swb = SteamWebBrowser('user', 'password')
@@ -202,7 +200,7 @@ class TestSteamWebBrowser(unittest.TestCase):
             swb.login()
 
             mock_input.assert_has_calls([
-                mock.call(StringStartingWith('Please enter the code sent to your mail addres at ')),
+                mock.call(StringStartingWith('Please enter the code sent to your mail address at ')),
                 mock.call('Please enter the code sent to your phone: '),
                 mock.call(StringStartingWith('Please take a look at the captcha image "')),
             ])
@@ -213,7 +211,7 @@ class TestSteamWebBrowser(unittest.TestCase):
     @httpretty.activate
     def test_login_failed(self):
         swb = SteamWebBrowserMocked('user', 'password')
-        httpretty.register_uri(httpretty.POST, 'https://steamcommunity.com/login/dologin/',
+        httpretty.register_uri(httpretty.POST, 'https://steamcommunity.com/mobilelogin/dologin/',
                                 body='{"success": false,"message":"Incorrect login."}')
         with self.assertRaises(IncorrectLoginError):
             swb.login()

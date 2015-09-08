@@ -322,7 +322,7 @@ class SteamWebBrowser(object):
             A string containing the code.
         '''
         print('SteamGuard requires email authentication...')
-        emailauth = input('Please enter the code sent to your mail addres at "%s": ' % maildomain)
+        emailauth = input('Please enter the code sent to your mail address at "%s": ' % maildomain)
         emailauth.upper()
         return emailauth
 
@@ -352,7 +352,7 @@ class SteamWebBrowser(object):
             path='/', path_specified=True,
             secure=False, expires=None, discard=False, comment=None, comment_url=None, rest={},
         )
-        self.session.set_cookie(c)
+        self.session.cookies.set_cookie(c)
         self._save_cookies()
 
     def _store_steamid(self, steamid):
@@ -365,7 +365,7 @@ class SteamWebBrowser(object):
             path='/', path_specified=True,
             secure=False, expires=None, discard=False, comment=None, comment_url=None, rest={},
         )
-        self.session.set_cookie(c)
+        self.session.cookies.set_cookie(c)
         self._save_cookies()
 
     def login(self, captchagid='-1', captcha_text='', emailauth='', emailsteamid='', loginfriendlyname='', twofactorcode=''):
@@ -405,10 +405,12 @@ class SteamWebBrowser(object):
             '''
             Save OAuth data which is a string containing json:
 
-            steamid:     [STR] The user's SteamID
-            oauth_token: [STR] The OAuth token used for repeat authentication, and all secure requests.
-            webcookie:   [STR] Cookie used to maintain secure access to steam's normal services (store, profile, settings, etc).
-                               This should already be in the cookiejar (steamLoginSecure).
+            steamid:         [STR] The user's SteamID
+            oauth_token:     [STR] The OAuth token used for repeat authentication, and all secure requests.
+            wgtoken_secure:  [STR] Cookie used to maintain secure access to steam's normal services (store, profile, settings, etc).
+                                   This is to be set whenever a steam page is loaded (stored as cookie:steamLoginSecure="<SteamID>||<wgtoken_secure>").
+            wgtoken:         [STR] Cookie used to maintain access to steam's public services.
+                                   This is to be set whenever a steam page is loaded (steamLogin="<SteamID>||<wgtoken_secure>").
             '''
             oauth_json = json.loads(data['oauth'])
             self.logger.debug('JSON Oauth: "%s"' % oauth_json)

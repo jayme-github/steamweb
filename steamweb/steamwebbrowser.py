@@ -81,11 +81,12 @@ class SteamWebBrowser(object):
         self.logger.info('Initialized with user: %s', self._username)
 
         self.session = Session()
+        # urllib3 will sleep for {backoff factor} * (2 ^ ({number of total retries} - 1)) seconds between attempts.
         self.session.mount('http://', HTTPAdapter(
-            max_retries=Retry(total=2, status_forcelist=[500, 502, 503, 504])
+            max_retries=Retry(total=2, backoff_factor=0.5, status_forcelist=[500, 502, 503, 504])
         ))
         self.session.mount('https://', HTTPAdapter(
-            max_retries=Retry(total=2, status_forcelist=[500, 502, 503, 504])
+            max_retries=Retry(total=2, backoff_factor=0.5, status_forcelist=[500, 502, 503, 504])
         ))
         self.set_useragent()
         # Avoid ResourceWarning: unclosed <ssl.SSLSocket ...> with python 3

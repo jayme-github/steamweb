@@ -2,6 +2,7 @@ from __future__ import print_function
 import time
 import re
 import os
+import stat
 import logging
 from requests import Session
 from requests.adapters import HTTPAdapter
@@ -99,6 +100,7 @@ class SteamWebBrowser(object):
             self.logger.info('Creating new cookie file: "%s"' % cookie_file)
             self.set_mobile_cookies()
             self._save_cookies()
+            os.chmod(cookie_file,  stat.S_IRUSR | stat.S_IWUSR)
         else:
             # load cookies
             self.logger.info('Loading cookies from file: "%s"' % cookie_file)
@@ -147,7 +149,7 @@ class SteamWebBrowser(object):
             # Store it for later reference and create it if it does not exist
             self._appdata_path = os.path.join(confighome, self.name)
             for p in [p for p in (confighome, self._appdata_path) if not os.path.isdir(p)]:
-                os.mkdir(p, 0o700)
+                os.mkdir(p, stat.S_IRWXU)
         self.logger.info('Appdata path: "%s"', self._appdata_path)
         return self._appdata_path
 
@@ -487,6 +489,7 @@ class SteamWebBrowserCfg(SteamWebBrowser):
 
         if cfg_changed:
             self._write_config()
+        os.chmod(self.cfg_path, stat.S_IRUSR | stat.S_IWUSR)
 
     def _write_config(self):
         with open(self.cfg_path, 'w') as cfg_fd:

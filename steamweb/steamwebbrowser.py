@@ -105,9 +105,6 @@ class SteamWebBrowser(object):
             # load cookies
             self.logger.info('Loading cookies from file: "%s"' % cookie_file)
             self.session.cookies.load(ignore_discard=True)
-            if self.logger.isEnabledFor(logging.DEBUG):
-                self._log_cookies()
-                self.logger.debug('Are we logged in: %s' % self.logged_in()) 
 
     @property
     def oauth_access_token(self):
@@ -426,21 +423,21 @@ class SteamWebBrowser(object):
         elif data.get('captcha_needed') == True and data.get('captcha_gid', '-1') != '-1':
             imgdata = self.get('https://steamcommunity.com/public/captcha.php',
                                         params={'gid': data['captcha_gid']})
-            captcha_text = self._handle_captcha(imgdata.content, data.get('message', ''))
+            captcha_text = self._handle_captcha(captcha_data=imgdata.content, message=data.get('message', ''))
             self.logger.info('Got captcha text "%s"' % captcha_text)
             if not captcha_text:
                 raise NoCaptchaCodeError('Captcha code not provided.')
             return self.login(captchagid=data['captcha_gid'], captcha_text=captcha_text)
 
         elif data.get('emailauth_needed') == True:
-            emailauth = self._handle_emailauth(data['emaildomain'], data.get('message', ''))
+            emailauth = self._handle_emailauth(maildomain=data['emaildomain'], message=data.get('message', ''))
             self.logger.info('Got e-mail code: "%s"' % emailauth)
             if not emailauth:
                 raise NoEmailCodeError('E-mail code not provided.')
             return self.login(emailauth=emailauth, emailsteamid=data['emailsteamid'])
 
         elif data.get('requires_twofactor') == True:
-            twofactorcode = self._handle_twofactor(data.get('message', ''))
+            twofactorcode = self._handle_twofactor(message=data.get('message', ''))
             self.logger.info('Got twofactor code: "%s"' % twofactorcode)
             if not twofactorcode:
                 raise NoTwoFactorCodeError('Two factor code not provided.')

@@ -105,6 +105,10 @@ class SteamWebBrowser(object):
             # load cookies
             self.logger.info('Loading cookies from file: "%s"' % cookie_file)
             self.session.cookies.load(ignore_discard=True)
+            if not self._has_cookie('forceMobile') or not self._has_cookie('mobileClient'):
+                self.clear_mobile_cookies()
+                self.set_mobile_cookies()
+                self._save_cookies()
 
     @property
     def oauth_access_token(self):
@@ -158,7 +162,6 @@ class SteamWebBrowser(object):
         for mc in self.mobile_cookies:
             for c in self.session.cookies:
                 if c.name == mc.name and \
-                        c.path == mc.path and \
                         c.domain == mc.domain:
                     # Remove cookie
                     self.session.cookies.clear(c.domain, c.path, c.name)

@@ -10,7 +10,7 @@ setup(
     name = 'steamweb',
     version = '0.4',
     description = 'lib to access/use steam web pages (stuff not exposed via API)',
-    long_description = 'lib to access/use steam web pages (stuff not exposed via API)',
+    long_description = open('README.rst', 'r').read(),
     platforms = ['any'],
     keywords = 'steam',
     author = 'Jayme',

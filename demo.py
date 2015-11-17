@@ -1,9 +1,17 @@
 #!/usr/bin/env python
 from __future__ import print_function
 import re
-from sys import version_info
+import sys
+import logging
+
+LOGFMT = '%(asctime)s (%(name)s.%(funcName)s) [%(levelname)s] %(message)s'
+logging.basicConfig(format=LOGFMT, level=logging.DEBUG)
+logging.getLogger('requests').setLevel(logging.WARNING)
+logger = logging.getLogger(__name__)
+
 from steamweb.steamwebbrowser import SteamWebBrowserCfg
-if version_info.major >= 3:
+
+if sys.version_info.major >= 3:
     from html.parser import HTMLParser
 else:
     from HTMLParser import HTMLParser

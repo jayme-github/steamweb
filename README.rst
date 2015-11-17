@@ -52,6 +52,8 @@ There is a subclass *SteamWebBrowserCfg* that includes basic configuration file 
     username = YOURSTEAMUSERNAME
     password = YOURSTEAMPASSWORD
 
+Then use *SteamWebBrowserCfg* without credentials in your code:
+
 .. code-block:: python
 
     from steamweb import SteamWebBrowserCfg

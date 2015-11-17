@@ -19,8 +19,8 @@ if version_info.major >= 3: # Python 3
 else: # Python 2
     from cookielib import LWPCookieJar, Cookie
     import ConfigParser as configparser
-    from builtins import input, int
-    def finalize(obj, func, *args, **kwargs):
+    from builtins import input, int # pylint:disable=redefined-builtin
+    def finalize(obj, func, *args, **kwargs): # pylint:disable=unused-argument
         ''' Stub method as there is no weakref.finalize in Python 2 '''
         pass
 
@@ -97,13 +97,13 @@ class SteamWebBrowser(object):
         self.session.cookies = LWPCookieJar(cookie_file)
         if not os.path.exists(cookie_file):
             # initialize new cookie file
-            self.logger.info('Creating new cookie file: "%s"' % cookie_file)
+            self.logger.info('Creating new cookie file: "%s"', cookie_file)
             self.set_mobile_cookies()
             self._save_cookies()
             os.chmod(cookie_file,  stat.S_IRUSR | stat.S_IWUSR)
         else:
             # load cookies
-            self.logger.info('Loading cookies from file: "%s"' % cookie_file)
+            self.logger.info('Loading cookies from file: "%s"', cookie_file)
             self.session.cookies.load(ignore_discard=True)
             if not self._has_cookie('forceMobile') or not self._has_cookie('mobileClient'):
                 self.clear_mobile_cookies()
@@ -156,7 +156,7 @@ class SteamWebBrowser(object):
 
     def set_useragent(self, useragent=DEFAULT_USERAGENT):
         self.session.headers.update({'User-Agent': useragent})
-        self.logger.debug('User-Agent set to: "%s"' % useragent)
+        self.logger.debug('User-Agent set to: "%s"', useragent)
 
     def clear_mobile_cookies(self):
         for mc in self.mobile_cookies:
@@ -171,7 +171,7 @@ class SteamWebBrowser(object):
             self.session.cookies.set_cookie(mc)
 
     def post(self, url, data=None, **kwargs):
-        self.logger.debug('POST "%s", data: "%s", kwargs: "%s"' %(url, data, kwargs))
+        self.logger.debug('POST "%s", data: "%s", kwargs: "%s"', url, data, kwargs)
         h = self._hash_cookies()
         r = self.session.post(url, data, **kwargs)
         # Will raise HTTPError on 4XX client error or 5XX server error response
@@ -190,7 +190,7 @@ class SteamWebBrowser(object):
             return r
 
     def get(self, url, **kwargs):
-        self.logger.debug('GET "%s", kwargs: "%s"' %(url, kwargs))
+        self.logger.debug('GET "%s", kwargs: "%s"', url, kwargs)
         h = self._hash_cookies()
         r = self.session.get(url, **kwargs)
         # Will raise HTTPError on 4XX client error or 5XX server error response
@@ -232,7 +232,7 @@ class SteamWebBrowser(object):
 
     def _log_cookies(self, prefix=''):
         for c in self.session.cookies:
-            self.logger.debug('%s: %s'%(prefix, repr(c)))
+            self.logger.debug('%s: %s', prefix, repr(c))
 
     def _get_cookie(self, name, domain):
         ''' Return the cookie "name" for "domain" if found
@@ -287,12 +287,12 @@ class SteamWebBrowser(object):
         # Use session directly as self.get() will trigger login if not logged in
         r = self.session.get('https://steamcommunity.com/my/')
         self.logger.debug('Request headers: %s', r.headers)
-        if not '<a class="global_action_link"' in r.text:
+        if '<a class="global_action_link"' not in r.text:
             return True
         return False
 
     @staticmethod
-    def _handle_captcha(captcha_data, message=''):
+    def _handle_captcha(captcha_data, message=''): # pylint:disable=unused-argument
         ''' Called when a captcha must be solved
         Writes the image to a temporary file and asks the user to enter the code.
 
@@ -312,7 +312,7 @@ class SteamWebBrowser(object):
         return captcha_text
 
     @staticmethod
-    def _handle_emailauth(maildomain='', message=''):
+    def _handle_emailauth(maildomain='', message=''): # pylint:disable=unused-argument
         ''' Called when SteamGuard requires authentication via e-mail.
         Asks the user to enter the code.
 
@@ -330,7 +330,7 @@ class SteamWebBrowser(object):
         return emailauth
 
     @staticmethod
-    def _handle_twofactor(message=''):
+    def _handle_twofactor(message=''): # pylint:disable=unused-argument
         ''' Called when SteamGuard requires two-factor authentication..
         Asks the user to enter the code.
 
@@ -371,10 +371,12 @@ class SteamWebBrowser(object):
         self.session.cookies.set_cookie(c)
         self._save_cookies()
 
-    def login(self, captchagid='-1', captcha_text='', emailauth='', emailsteamid='', loginfriendlyname='', twofactorcode=''):
-        self.logger.info('login calles with: captchagid="%s", captcha_text="%s", emailauth="%s", emailsteamid="%s", loginfriendlyname="%s", twofactorcode="%s"' % (
-            captchagid, captcha_text, emailauth, emailsteamid, loginfriendlyname, twofactorcode,
-        ))
+    def login(self, captchagid='-1', captcha_text='', emailauth='', emailsteamid='', loginfriendlyname='', twofactorcode=''): # pylint:disable=too-many-arguments
+        self.logger.info('login calles with: captchagid="%s", captcha_text="%s", emailauth="%s",'
+                        ' emailsteamid="%s", loginfriendlyname="%s", twofactorcode="%s"',
+                        captchagid, captcha_text, emailauth, emailsteamid, loginfriendlyname,
+                        twofactorcode,
+        )
         # Force a new RSA key request for every call
         self._get_rsa_key()
 
@@ -396,9 +398,9 @@ class SteamWebBrowser(object):
         }
 
         req = self.post(url, data=values)
-        self.logger.debug('login response: "%s"' % req.text)
+        self.logger.debug('login response: "%s"', req.text)
         data = req.json()
-        self.logger.debug('JSON login response: "%s"' % data)
+        self.logger.debug('JSON login response: "%s"', data)
         if data.get('message'):
             self.logger.warning(data.get('message'))
             if data.get('message') == 'Incorrect login.':
@@ -416,10 +418,10 @@ class SteamWebBrowser(object):
                                    This is to be set whenever a steam page is loaded (steamLogin="<SteamID>||<wgtoken_secure>").
             '''
             oauth_json = json.loads(data['oauth'])
-            self.logger.debug('JSON Oauth: "%s"' % oauth_json)
+            self.logger.debug('JSON Oauth: "%s"', oauth_json)
             self._store_oauth_access_token(oauth_json['oauth_token'])
             self._store_steamid(oauth_json['steamid'])
-            self.logger.info('Login completed, steamid: "%s"' % self.steamid)
+            self.logger.info('Login completed, steamid: "%s"', self.steamid)
             # Logged in
             return self.steamid
 
@@ -427,21 +429,21 @@ class SteamWebBrowser(object):
             imgdata = self.get('https://steamcommunity.com/public/captcha.php',
                                         params={'gid': data['captcha_gid']})
             captcha_text = self._handle_captcha(captcha_data=imgdata.content, message=data.get('message', ''))
-            self.logger.info('Got captcha text "%s"' % captcha_text)
+            self.logger.info('Got captcha text "%s"', captcha_text)
             if not captcha_text:
                 raise NoCaptchaCodeError('Captcha code not provided.')
             return self.login(captchagid=data['captcha_gid'], captcha_text=captcha_text)
 
         elif data.get('emailauth_needed') == True:
             emailauth = self._handle_emailauth(maildomain=data['emaildomain'], message=data.get('message', ''))
-            self.logger.info('Got e-mail code: "%s"' % emailauth)
+            self.logger.info('Got e-mail code: "%s"', emailauth)
             if not emailauth:
                 raise NoEmailCodeError('E-mail code not provided.')
             return self.login(emailauth=emailauth, emailsteamid=data['emailsteamid'])
 
         elif data.get('requires_twofactor') == True:
             twofactorcode = self._handle_twofactor(message=data.get('message', ''))
-            self.logger.info('Got twofactor code: "%s"' % twofactorcode)
+            self.logger.info('Got twofactor code: "%s"', twofactorcode)
             if not twofactorcode:
                 raise NoTwoFactorCodeError('Two factor code not provided.')
             return self.login(twofactorcode=twofactorcode)

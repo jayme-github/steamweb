@@ -1,0 +1,5 @@
+pylint:
+    disable:
+        - pointless-string-statement
+ignore-paths:
+    - steamweb/__init__.py

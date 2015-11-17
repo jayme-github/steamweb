@@ -8,7 +8,7 @@ def parse_requirements(path):
 
 setup(
     name = 'steamweb',
-    version = '0.3',
+    version = '0.4',
     description = 'lib to access/use steam web pages (stuff not exposed via API)',
     long_description = 'lib to access/use steam web pages (stuff not exposed via API)',
     platforms = ['any'],
@@ -19,7 +19,7 @@ setup(
     packages = ['steamweb'],
     license = 'GNU Affero General Public License v3',
     classifiers = [
-        'Development Status :: 3 - Alpha',
+        'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: GNU Affero General Public License v3',
         'Operating System :: OS Independent',

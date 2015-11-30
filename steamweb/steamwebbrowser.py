@@ -371,7 +371,8 @@ class SteamWebBrowser(object):
         self.session.cookies.set_cookie(c)
         self._save_cookies()
 
-    def login(self, captchagid='-1', captcha_text='', emailauth='', emailsteamid='', loginfriendlyname='', twofactorcode=''): # pylint:disable=too-many-arguments
+    def login(self, captchagid='-1', captcha_text='', emailauth='', emailsteamid='', 
+                loginfriendlyname='', twofactorcode=''): # pylint:disable=too-many-arguments
         self.logger.info('login calles with: captchagid="%s", captcha_text="%s", emailauth="%s",'
                         ' emailsteamid="%s", loginfriendlyname="%s", twofactorcode="%s"',
                         captchagid, captcha_text, emailauth, emailsteamid, loginfriendlyname,

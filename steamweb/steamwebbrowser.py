@@ -211,8 +211,16 @@ class SteamWebBrowser(object):
     def get_account_page(self):
         return self.get('https://store.steampowered.com/account/')
 
+    @property
+    def profile_url(self):
+        try:
+            path = 'profiles/%s' % str(self.steamid)
+        except AttributeError:
+            path = 'my'
+        return 'https://steamcommunity.com/' + path
+
     def get_profile_page(self):
-        return self.get('https://steamcommunity.com/my/')
+        return self.get(self.profile_url)
 
     def _remove_nonascii(self, instr):
         ''' Steam strips non-ascii characters before sending across the web.
@@ -285,7 +293,7 @@ class SteamWebBrowser(object):
             self.logger.debug('No access token stored')
             return False
         # Use session directly as self.get() will trigger login if not logged in
-        r = self.session.get('https://steamcommunity.com/my/')
+        r = self.session.get(self.profile_url)
         self.logger.debug('Request headers: %s', r.headers)
         if '<a class="global_action_link"' not in r.text:
             return True

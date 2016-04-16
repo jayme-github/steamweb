@@ -12,7 +12,7 @@
 Steamweb
 ============
 
-`steamweb <https://github.com/jayme-github/steamweb>`_ is a python library to access/use steam web pages (stuff not exposed via `the API, <https://developer.valvesoftware.com/wiki/Steam_Web_API>`_ for the API, use `smiley/steamap <https://github.com/smiley/steamapi>`_)
+`steamweb <https://github.com/jayme-github/steamweb>`_ is a python library to access/use steam web pages (stuff not exposed via `the API, <https://developer.valvesoftware.com/wiki/Steam_Web_API>`_ for the API, use `smiley/steamapi <https://github.com/smiley/steamapi>`_)
 
 Installation
 ============
